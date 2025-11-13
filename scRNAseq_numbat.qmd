@@ -1,0 +1,340 @@
+---
+title: "CNV Inference using Numbat"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we will be using Numbat [@numbat] to run copy number variation (CNV) inference from single-cell RNA seq data. It leverages both expression and heterozygous SNPs beta-allele frequency (BAF) to generate joint CNV probability per cell.
+
+## 1 Setup
+
+This initial step involves downloading and preparing the essential reference files required for the Numbat analysis. These references include SNP lists from the 1000 Genomes Project and the Eagle software for phasing.
+
+**NOTES:**
+
+* Numbat runs best with Docker but since we can't run docker on U-M HPC we will have the following workaround
+First, We install Numbat in R using `install.packages('numbat')`, We will access the `pileup_and_phase.R` script from the library path as shown in pileup_script_path below
+
+* We have three dependencies (samtools, eagle and cellsnp-lite). **Samtools** is already on the cluster and can be activated using `ml samtools`. **Eagle** is downloaded [here](https://alkesgroup.broadinstitute.org/Eagle/) and the path to the binary file is defined below. **cellsnp-lite** is best installed as conda environment due to conflicts and then you can activate this conda environment before running the slurm script. The exact conda environment used in this run can be installed using this [yml](envs/CSP.yml) file using `conda env create -f CSP.yml`
+
+```{bash}
+conda create --name CSP
+conda activate CSP
+conda install -c bioconda cellsnp-lite
+conda activate CSP
+```
+
+## 2 Download references
+
+```{bash}
+mkdir -p ../data/references/
+wget [https://sourceforge.net/projects/cellsnp/files/SNPlist/genome1K.phase3.SNP_AF5e2.chr1toX.hg38.vcf.gz](https://sourceforge.net/projects/cellsnp/files/SNPlist/genome1K.phase3.SNP_AF5e2.chr1toX.hg38.vcf.gz) 
+gunzip genome1K.phase3.SNP_AF5e2.chr1toX.hg38.vcf.gz
+mv genome1K.phase3.SNP_AF5e2.chr1toX.hg38.vcf  ../data/references/
+wget [http://pklab.med.harvard.edu/teng/data/1000G_hg38.zip](http://pklab.med.harvard.edu/teng/data/1000G_hg38.zip) 
+unzip 1000G_hg38.zip
+mv 1000G_hg38 data/references/
+wget [https://storage.googleapis.com/broad-alkesgroup-public/Eagle/downloads/Eagle_v2.4.1.tar.gz](https://storage.googleapis.com/broad-alkesgroup-public/Eagle/downloads/Eagle_v2.4.1.tar.gz)
+gunzip Eagle_v2.4.1.tar.gz
+tar -xzvf Eagle_v2.4.1
+```
+
+---
+
+## 3 Pileup and Phasing
+
+This stage processes the single-cell RNA-seq data to generate allele counts at SNP locations, which is a fundamental input for Numbat. This SLURM script processes each sample to generate allele counts from BAM files. It uses `cellsnp-lite` for pileup and Eagle for phasing. The script is designed to run as a job array on an HPC cluster, processing one sample per job. 
+
+The script pulls a `numbat_manifest.txt` file from `data` directory with at two columns: sample_id and cellranger_output path for each sample as follow
+
+|          |                                           |
+|----------|-------------------------------------------|
+| sample_1 | path/to/sample_1/cellranger_output |
+| sample_2 | path/to/sample_2/cellranger_output |
+| sample_3 | path/to/sample_3/cellranger_output |
+
+```{bash}
+#!/bin/bash
+
+#SBATCH --account=
+#SBATCH --job-name='Numbat_pileup_%a'
+#SBATCH --output=logs/Numbat_pileup_%a.log
+
+#SBATCH --partition=largemem
+#SBATCH --mem=256G
+#SBATCH --cpus-per-task=16
+#SBATCH --time=48:00:00
+#SBATCH --array=1-48
+
+echo "### Loading Modules ###"
+ml samtools
+
+echo "### Reading samples manifest ###"
+samples_manifest=../data/numbat_manifest.txt
+sample_name=$(cat $samples_manifest | cut -f1 | sed -n $[SLURM_ARRAY_TASK_ID]p)
+sample_10xOutput=$(cat $samples_manifest | cut -f2 | sed -n $[SLURM_ARRAY_TASK_ID]p)
+echo "::> Analyzing sample ${sample_name}"
+echo "::> sample 10x Output directory ${sample_10xOutput}"
+
+## Setting up path for different variables and executables
+echo "### Loading executables ###"
+pileup_script_path=path/to/R/x86_64-pc-linux-gnu-library/4.2/numbat/bin/pileup_and_phase.R
+eagle_path=Eagle_v2.4.1/eagle
+gmap_path=Eagle_v2.4.1/tables/genetic_map_hg38_withX.txt.gz
+snpvcf_path=../data/references/genome1K.phase3.SNP_AF5e2.chr1toX.hg38.vcf 
+panelDir_path=../data/references/1000G_hg38
+cellbender_res_path=../outputs/scRNAseq_Analysis/cellbender
+
+## Setting up output directory
+echo "### Creating output directory ###"
+mkdir -p ../outputs/scRNAseq_Analysis/Numbat/pileup/${sample_name}
+outputDir=../outputs/scRNAseq_Analysis/Numbat/pileup/${sample_name}
+echo "::> Output Directory: ${outputDir}"
+
+## Running pileup and phasing
+echo "### Running Pileup and Phasing ###"
+Rscript ${pileup_script_path} \
+  --label ${sample_name} \
+  --sample ${sample_name} \
+  --bam ${sample_10xOutput}/possorted_genome_bam.bam \
+  --barcodes ${cellbender_res_path}/${sample_name}_filtered.h5 \
+  --outdir ${outputDir} \
+  --gmap ${gmap_path} \
+  --snpvcf ${snpvcf_path} \
+  --paneldir ${panelDir_path} \
+  --eagle ${eagle_path} \
+  --ncores 16
+```
+
+The following snippet provides a quick way in R to verify which samples have successfully completed the pileup and phasing step. It scans the output directory and checks for the presence of the final allele counts file (`_allele_counts.tsv.gz`).
+
+```{r}
+outDir <- "../outputs/scRNAseq_Analysis/Numbat/pileup/"
+samples <- list.files(outDir, full.names = T)
+
+pileup_res <- lapply(samples, function(sample){
+  sample_name <- gsub(outDir, "", sample)
+  sample_name <- gsub("/","",sample_name)
+  processed <- any(grepl("_allele_counts.tsv.gz", list.files(sample)))
+  return(data.frame(sample_name, processed))
+}) %>% bind_rows()
+```
+
+---
+
+## 4 Generate Reference Expression Profile
+
+Numbat requires a reference expression profile from normal (healthy) cells to distinguish CNVs in tumor cells. This script generates that reference. We can download the processed data object directly from Zenodo [here](). This profile is saved as `normal_ref_profile.txt` and will be used as the reference for Numbat's CNV calling.
+
+```{r}
+ref <- readRDS(url())
+normal <- subset(ref, subset = tissue == 'Healthy')
+
+exprs <- GetAssayData(normal, assay = 'RNA', layer = 'counts')
+annot <- normal@meta.data %>%
+  select(CellTypes) %>%
+  rownames_to_column() %>%
+  `colnames<-`(c("cell","group"))
+ref_ct <- aggregate_counts(exprs, annot)
+write.table(ref_ct, "../outputs/scRNAseq_Analysis/Numbat/normal_ref_profile.txt", sep = "\t", col.names = T, row.names = T, quote = F)
+```
+
+---
+
+## 5 Run Numbat Analysis
+
+This is the core step where the Numbat algorithm is executed to call CNVs. The script uses the `slurmR` package to distribute the jobs across an HPC cluster for parallel processing. For each sample, it loads the count data and allele data, and runs the `run_numbat` function, saving the output to a specified directory.
+
+```{r}
+pileupDir <- "../outputs/scRNAseq_Analysis/Numbat/pileup/"
+outputDir <- "../outputs/scRNAseq_Analysis/Numbat/Numbat_CNV_calling/"
+dir.create(outputDir, showWarnings = F, recursive = T)
+
+all_samples <- SplitObject(ref, split.by = 'sample_Id')
+tumor_samples <- subset(samples, subset = tissue != 'Healthy')
+tumor_samples <- SplitObject(tumor_samples, split.by = "sample_Id")
+panc_normal_ref <- as.matrix(read.table("../outputs/scRNAseq_Analysis/Numbat/normal_ref_profile.txt"))
+
+slurm_jobs <- Slurm_lapply(
+
+  njobs = length(tumor_samples),
+  job_name = "Numbat",
+  tmp_path = getwd(),
+  plan = "none",
+  sbatch_opt = list(partition = 'largemem', account = 'timofran0',
+                    mem = '256G', "cpus-per-task" = "16", time = "48:00:00"),
+  export = c("panc_normal_ref","pileupDir","outputDir"),
+  overwrite = TRUE,
+
+  X = as.list(tumor_samples),
+  FUN = function(x) {
+
+    suppressPackageStartupMessages({
+      library(Seurat)
+      library(numbat)
+      library(tidyverse)
+    })
+
+    sample_ct <- GetAssayData(x, assay = "RNA", slot = "counts")
+    sample_name <- unique(x$sample_Id)
+    df_allele <- paste0(pileupDir, sample_name, "/", sample_name, "_allele_counts.tsv.gz")
+    df_allele <- read.table(df_allele, header = T, sep = "\t") %>%
+      mutate(cell = paste0(sample_name, "_", cell))
+    
+    run_numbat(
+      count_mat = sample_ct, 
+      lambdas_ref = panc_normal_ref, 
+      df_allele = df_allele,
+      ncores = parallel::detectCores(),
+      out_dir = paste0(outputDir, sample_name),
+      genome = "hg38",
+      max_iter = 10,
+      check_convergence = T
+    )
+  }
+)
+sbatch(slurm_jobs)
+```
+
+Similar to the pileup check, this script verifies the completion of the Numbat runs. It iterates through the Numbat output directories and checks for the existence of the final results file (`_final.tsv.gz`) for each sample.
+
+```{r}
+outDir <- "../outputs/scRNAseq_Analysis/Numbat/Numbat_CNV_calling/"
+samples <- list.files(outDir, full.names = T)
+
+results  <- lapply(samples, function(x){
+  sample_name <- gsub(paste0(outDir,"/"), "", x)
+  processed <- any(grepl("_final.tsv.gz", list.files(x)))
+  return(data.frame(sample_name, processed))
+}) %>% bind_rows()
+```
+
+---
+
+## 6 Parse and Visualize CNV Results
+
+After running Numbat, the final steps involve parsing the output files to extract meaningful results and creating visualizations to interpret the CNV landscape.
+
+This script loads the Numbat output objects (`.rds` files) for all processed samples. It then extracts and consolidates two key pieces of information:
+1.  **Cell-level metadata:** For each cell, it extracts CNV probabilities, clone assignments, and compartment information.
+2.  **Clone-level profiles:** It aggregates the CNV data to generate a consensus CNV profile for each identified tumor clone.
+
+These consolidated data tables are then saved to disk for downstream analysis and visualization.
+
+```{r}
+source("utils/CNV_analysis.R")
+
+resultDir <- "../outputs/scRNAseq_Analysis/Numbat/Numbat_CNV_calling/"
+samplesDir <- list.files(resultDir, full.names = T)
+names(samplesDir) <- gsub("../outputs/scRNAseq_Analysis/Numbat/Numbat_CNV_calling/", "", samplesDir)
+
+Numbat_Results <- lapply(samplesDir, function(x){
+  message(paste0(":: Parsing: ",x))
+  if (any(grepl('_final.tsv.gz',list.files(x)))){
+    message(paste0("> CNV results found!"))
+    nb <- Numbat$new(x, verbose = F)
+  } else {
+    message(paste0("> No CNV events found!"))
+    return(NA)
+  }})
+Numbat_Results <- Numbat_Results[!is.na(Numbat_Results)]
+names(Numbat_Results) <- gsub("//","", names(Numbat_Results))
+
+saveRDS(Numbat_Results, "../outputs/scRNAseq_Analysis/Numbat/parsed_Numbat_results.rds")
+
+# Generating .seg file ----------------------------------------------------
+
+clones <- lapply(Numbat_Results, function(x){
+  clones <- x$segs_consensus %>%
+    select(sample, CHROM, seg_start, seg_end, cnv_state_post, phi_mle) %>%
+    `colnames<-`(c("clone","chrom", "loc.start", "loc.end", "state","seg.mean"))
+  return(clones)
+}) %>% 
+  bind_rows(.id = 'sample')
+clones <- clones %>% filter(!is.na(clone))
+write.table(clones, "../outputs/scRNAseq_Analysis/Numbat/parsed_Numbat_Results/samples_clones.txt", quote = F, col.names = T, row.names = F, sep = '\t')
+
+seg <- clones %>% mutate(ID = paste0(sample,"_",clone)) %>%
+  select(ID, chrom, loc.start, loc.end, state, seg.mean) %>%
+  mutate(seg.mean = seg.mean - 1)
+write.table(seg, "../outputs/scRNAseq_Analysis/Numbat/parsed_Numbat_Results/samples_clones.seg", quote = F, col.names = T, row.names = F, sep = '\t')
+
+# Generating cell-level data ------------------------------------------
+
+cells_metadata <- lapply(Numbat_Results,  function(x){
+  cells_CNV_metadata <- x$clone_post %>%
+    select(cell, p_cnv_x, p_cnv_y, p_cnv, clone_opt, compartment_opt) %>%
+    `colnames<-`(c("cell", "exp_cnv_prop", "allele_cnv_prop", "joint_cnv_prop", "clone", "compartment"))
+  return(cells_CNV_metadata)
+}) %>%
+  bind_rows(.id = 'sample') %>%
+  select(-sample) %>%
+  data.frame() 
+
+write.table(cells_metadata, "../outputs/scRNAseq_Analysis/Numbat/cells_metadata_pancRef.txt", quote = F, col.names = T, row.names = T, sep = '\t')
+
+# Generating clone profile data ------------------------------------------
+
+clones_profile <- lapply(Numbat_Results,  function(x){
+
+  ## Extracting clones data
+  clone_profile <- get_clone_profile(x$joint_post, x$clone_post) %>%
+    filter(clone != 1) %>% ## Removing clone one as it is the normal cells
+    mutate(clone = clone - 1) ## changing the name of the clones so it starts with clone 1
+  
+  ## clones CN ratio
+  clone_phi <- x$segs_consensus %>% 
+    filter(!(is.na(sample))) %>%
+    select(CHROM, seg_start, seg_end, cnv_state_post, phi_mle) %>%
+    dplyr::rename(cnv_state = cnv_state_post) %>%
+    mutate(log2_phi_mle = log2(phi_mle))
+  
+  ## Merging both dataframes
+  clone_profile <- merge(clone_profile, clone_phi, by = c("CHROM","seg_start","seg_end", "cnv_state"))
+  
+  return(clone_profile)
+}) %>% bind_rows(.id = 'sample')
+clones_profile$sample_clone <- paste0(clones_profile$sample, "_clone_", clones_profile$clone)
+
+write.table(clones_profile, "../outputs/scRNAseq_Analysis/Numbat/clone_profile.txt", quote = F, col.names = T, row.names = F, sep = '\t')
+```
+
+## 7 Visualize CNV Results
+
+```{r}
+clone_profiles <- read.table("../outputs/scRNAseq_Analysis/Numbat/clone_profile.txt", header = T, sep = '\t')
+clone_profile <- merge(clone_profiles, tumor@meta.data %>% select(sample_clone, `Cell Type`), by = 'sample_clone')
+cnv_heatmap(clone_profile, var = 'clone')
+```
+
+## 8 Add Numbat Results
+
+The results are added as metadata to the Seurat object. This enriches the object with information about the predicted ploidy and clonal status of cells.
+
+```{r}
+numbat_res <- cells_metadata %>%
+  `rownames<-`(NULL) %>%
+  column_to_rownames('cell')
+ref <- AddMetaData(ref, numbat_res)
+```
+
+We generate plots to visualize the Numbat results on the UMAP. A `DimPlot` shows the predicted cell compartments (e.g., 'malignant', 'normal'), and a `FeaturePlot` shows the proportion of the genome affected by CNVs (`joint_cnv_prop`) for each cell.
+
+```{r}
+DimPlot(ref, group.by = c('compartment'))
+FeaturePlot(ref, features = c('joint_cnv_prop'), order = T)
+```
+
+```{r}
+#| eval: false
+sessionInfo()
+```

@@ -1,0 +1,155 @@
+---
+title: "Spatial Transcriptomics Neighborhood Analysis"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we will be using semla [@semla] R Package to analyze the composition of the neighborhood of benign and neoplastic domains on spatial transcriptomics data. We calculate the radial distance from ductal, PanIN, GLTumor and PDTumor spatial domains and subset the spots in 150 microns from these domains. We then visualize the composition of the neighborhood using pie charts and barplots.
+
+## 1 Setup and data import
+
+Data can be downloaded from Zenodo [here]().
+
+```{r}
+
+library(semla)
+library(Seurat)
+library(tidyverse)
+
+samples_info <- readxl::read_xlsx("../data/visium_samples_manifest.xlsx")
+merged <- qs::qread("outputs/Spatial_Clustering/tumor_tumoradj_GoL_samples_annotated_v2_lite.qs")
+cols <- CellChat::scPalette(length(levels(merged$main_annotation)))
+names(cols) <- levels(merged$main_annotation)
+```
+
+## 2 Tumor tissue neighborhood analysis
+
+```{r}
+tumor <- subset(merged, subset = tissue == 'Tumor')
+tumor_samples <- SplitObject(tumor, split.by = 'sample_id')
+
+## Calculating the radial distance
+tumor_samples <- lapply(tumor_samples, function(x){
+  x <- UpdateSeuratForSemla(x)
+  x@tools$Staffli@meta_data <- tibble(x@meta.data %>%
+                                        select(barcode, array_row, array_col, pxl_row_in_fullres, pxl_col_in_fullres) %>%
+                                        dplyr::rename(x = array_row, y = array_col) %>%
+                                        mutate(sampleID = 1,
+                                        barcode = rownames(.)))
+  x <- LoadImages(x, image_height = as.numeric(GetImageInfo(x)$height))
+  x <- RadialDistance(x, column_name = "main_annotation", selected_groups = c("Ducts", "PanIN/GLTumor", "PDTumor", "Immune(TLS)"), maxDist = 200, convert_to_microns = T)
+  x@meta.data <- mutate(x@meta.data,
+                        PDTumor_nbors = ifelse(r_dist_PDTumor < 0 | r_dist_PDTumor > 150, "FALSE", "TRUE"),
+                        PanIN_nbors = ifelse(`r_dist_PanIN/GLTumor` < 0 | `r_dist_PanIN/GLTumor` > 150, "FALSE", "TRUE"),
+                        Ducts_nbors = ifelse(r_dist_Ducts < 0 | r_dist_Ducts > 150, "FALSE", "TRUE"),
+                        TLS_nbors = ifelse(`r_dist_Immune(TLS)` < 0 | `r_dist_Immune(TLS)` > 150, "FALSE", "TRUE"))
+  x <- UpdateSeuratFromSemla(x)
+  x@images$slice1 <- NULL
+  return(x)
+})
+
+## Subsetting spots in 150 microns distance
+tumor_Nhood_Dist <- lapply(tumor_samples, function(x){
+  PDTumor_nbors <- x@meta.data %>% filter(PDTumor_nbors == 'TRUE') %>% pull(main_annotation) %>% table() %>% prop.table() %>% as.matrix()
+  PanIN_nbors <- x@meta.data %>% filter(PanIN_nbors == 'TRUE') %>% pull(main_annotation) %>% table() %>% prop.table() %>% as.matrix()
+  Ducts_nbors <- x@meta.data %>% filter(Ducts_nbors == 'TRUE') %>% pull(main_annotation) %>% table() %>% prop.table() %>% as.matrix()
+  ImmuneTLS_nbors <- x@meta.data %>% filter(TLS_nbors == 'TRUE') %>% pull(main_annotation) %>% table() %>% prop.table() %>% as.matrix()
+  res <- data.frame(PDTumor_nbors = PDTumor_nbors,
+                    PanIN_nbors = PanIN_nbors,
+                    Ducts_nbors = Ducts_nbors,
+                    ImmuneTLS_nbors = ImmuneTLS_nbors) %>%
+    rownames_to_column(var = 'domain') %>%
+    reshape2::melt() %>%
+    `colnames<-`(c("nhood", "domain", "fraction")) %>%
+    select(domain, nhood, fraction)
+  return(res)
+}) %>%
+  bind_rows(.id = 'sample_id')
+qsave(tumor_Nhood_Dist, "outputs/Misc/Tumor_Nhood_Dist.qs")
+
+average_tumor_nhood_dist <- tumor_Nhood_Dist %>%
+  filter(domain != 'ImmuneTLS_nbors') %>%
+  group_by(domain, nhood) %>%
+  summarise(mean = mean(fraction))
+average_tumor_nhood_dist$domain <- factor(average_tumor_nhood_dist$domain, levels = c("Ducts_nbors", "PanIN_nbors", "PDTumor_nbors"))
+qsave(average_tumor_nhood_dist, "outputs/Misc/average_tumor_nhood_dist")
+
+ggplot(average_tumor_nhood_dist, aes(x = "", y = mean, fill = nhood)) +
+  geom_bar(stat = "identity", width = 1, color = 'white') +
+  coord_polar("y") +
+  theme_void() +
+  facet_wrap(~domain) +
+  scale_fill_manual(values = cols)
+
+average_TLS_nhood_dist <- tumor_Nhood_Dist %>%
+  filter(domain == 'ImmuneTLS_nbors') %>%
+  group_by(domain, nhood) %>%
+  summarise(mean = mean(fraction))
+qsave(average_TLS_nhood_dist, "outputs/Misc/average_TLS_nhood_dist.qs")
+
+ggplot(average_TLS_nhood_dist, aes(x = "", y = mean, fill = nhood)) +
+  geom_bar(stat = "identity", width = 1, color = 'white') +
+  coord_polar("y") +
+  theme_void() +
+  facet_wrap(~domain) +
+  scale_fill_manual(values = cols)
+```
+
+## 3 Donor tissue neighborhood analysis
+
+```{r}
+gol <- subset(merged, subset = tissue == 'GoL')
+gol_samples <- SplitObject(gol, split.by = 'sample_id')
+gol_samples <- lapply(gol_samples, function(x){
+  x <- UpdateSeuratForSemla(x)
+  x@tools$Staffli@meta_data <- tibble(x@meta.data %>%
+                                        select(barcode, array_row, array_col, pxl_row_in_fullres, pxl_col_in_fullres) %>%
+                                        dplyr::rename(x = array_row, y = array_col) %>%
+                                        mutate(sampleID = 1,
+                                               barcode = rownames(.)))
+  x <- LoadImages(x, image_height = as.numeric(GetImageInfo(x)$height))
+  x <- RadialDistance(x, column_name = "main_annotation", selected_groups = c("Ducts", "PanIN/GLTumor"), maxDist = 200, convert_to_microns = T)
+  x@meta.data <- mutate(x@meta.data,
+                        PanIN_nbors = ifelse(`r_dist_PanIN/GLTumor` < 0 | `r_dist_PanIN/GLTumor` > 150, "FALSE", "TRUE"),
+                        Ducts_nbors = ifelse(r_dist_Ducts < 0 | r_dist_Ducts > 150, "FALSE", "TRUE"))
+  x <- UpdateSeuratFromSemla(x)
+  x@images$slice1 <- NULL
+  return(x)
+})
+
+gol_Nhood_Dist <- lapply(gol_samples, function(x){
+  PanIN_nbors <- x@meta.data %>% filter(PanIN_nbors == 'TRUE') %>% pull(main_annotation) %>% table() %>% prop.table() %>% as.matrix()
+  Ducts_nbors <- x@meta.data %>% filter(Ducts_nbors == 'TRUE') %>% pull(main_annotation) %>% table() %>% prop.table() %>% as.matrix()
+  res <- data.frame(PanIN_nbors = PanIN_nbors,
+                    Ducts_nbors = Ducts_nbors) %>%
+    rownames_to_column(var = 'domain') %>%
+    reshape2::melt() %>%
+    `colnames<-`(c("nhood", "domain", "fraction")) %>%
+    select(domain, nhood, fraction)
+  return(res)
+}) %>%
+  bind_rows(.id = 'sample_id')
+qsave(gol_Nhood_Dist, "outputs/Misc/GoL_Nhood_Dist.qs")
+
+average_gol_nhood_dist <- gol_Nhood_Dist %>%
+  group_by(domain, nhood) %>%
+  summarise(mean = mean(fraction))
+average_gol_nhood_dist$domain <- factor(average_gol_nhood_dist$domain, levels = c("Ducts_nbors", "PanIN_nbors"))
+qsave(average_gol_nhood_dist, "outputs/Misc/average_gol_nhood_dist.qs")
+
+ggplot(average_gol_nhood_dist, aes(x = "", y = mean, fill = nhood)) +
+  geom_bar(stat = "identity", width = 1, color = 'white') +
+  coord_polar("y") +
+  theme_void() +
+  facet_wrap(~domain) +
+  scale_fill_manual(values = cols)
+```

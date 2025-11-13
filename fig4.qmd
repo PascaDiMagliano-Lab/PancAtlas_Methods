@@ -1,0 +1,254 @@
+---
+title: "Figure 4"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SeuratExtend)
+  library(CellChat)
+  library(BayesPrism)
+  library(tidyverse)
+  library(EnhancedVolcano)
+  library(qs)
+  library(SPATA2)
+  library(patchwork)
+  library(pheatmap)
+  library(numbat)
+})
+
+
+scRef <- qread("../outputs/scRNAseq_Analysis/scRef.qs")
+spatial <- qread("../outputs/Spatial_Clustering/spatial.qs")
+cols <- scPalette(length(levels(spatial$main_annotation)))
+names(cols) <- levels(spatial$main_annotation)
+
+gol_Nhood_Dist <- qread("../outputs/Misc/GoL_Nhood_Dist.qs")
+average_gol_nhood_dist <- qread("../outputs/Misc/average_gol_nhood_dist.qs")
+tumor_Nhood_Dist <- qread("../outputs/Misc/Tumor_Nhood_Dist.qs")
+average_tumor_nhood_dist <- qread("../outputs/Misc/average_tumor_nhood_dist.qs")
+
+tumor_spata2 <- qread("../outputs/Misc/tumor_sample_spata2_object.qs")
+tumor_spata2_2 <- qread("../outputs/Misc/SU-21-54126_D2_tumor_sample_spata2_object.qs")
+gol_spata2 <- qread("../outputs/Misc/gol_sample_spata2_object.qs")
+gol_spata2_2 <- qread("../outputs/Misc/AJJB111_B1_gol_sample_spata2_object.qs")
+
+tumor_moran <- qread("../outputs/CCC/liana_res_mapped_tumor_morans.qs")
+
+# Pie Chart Healthy -------------------------------------------------------------------
+gol_pie_chart <- ggplot(average_gol_nhood_dist, aes(x = "", y = mean, fill = nhood)) +
+  geom_bar(stat = "identity", width = 1, color = 'white') +
+  coord_polar("y") +
+  theme_void() +
+  facet_wrap(~domain) +
+  scale_fill_manual(values = cols) +
+  NoLegend()
+
+ggsave("Fig4A.pdf", gol_pie_chart, width = 10, height = 5, units = 'in', dpi = 1200)
+
+# Pie Chart Tumor -------------------------------------------------------------------
+tumor_pie_chart <- ggplot(average_tumor_nhood_dist, aes(x = "", y = mean, fill = nhood)) +
+  geom_bar(stat = "identity", width = 1, color = 'white') +
+  coord_polar("y") +
+  theme_void() +
+  facet_wrap(~domain) +
+  scale_fill_manual(values = cols) +
+  NoLegend()
+ggsave("Fig4B.pdf", tumor_pie_chart, width = 10, height = 5, units = 'in', dpi = 1200)
+
+# Pie Chart Legend -------------------------------------------------------------------
+legend <- get_legend(ggplot(average_tumor_nhood_dist, aes(x = "", y = mean, fill = nhood)) +
+                       geom_bar(stat = "identity", width = 1, color = 'white') +
+                       scale_fill_manual(values = cols))
+ggsave("Fig4AB_Legend.pdf", legend, width = 2, height = 5, units = 'in', dpi = 1200)
+
+# Nhood Wilcox -------------------------------------------------------------------
+gol_Nhood_Dist$tissue <- "Healthy"
+tumor_Nhood_Dist$tissue <- "PDAC"
+nhood_df <- rbind(gol_Nhood_Dist, tumor_Nhood_Dist)
+nhood_df$tissue_domain <- paste0(nhood_df$tissue, "_", nhood_df$domain)
+nhood_df$tissue_domain <- gsub("_nbors", "", nhood_df$tissue_domain)
+nhood_df <- nhood_df[!(nhood_df$sample_id == 'AJJB111_B1' & nhood_df$domain == 'PanIN_nbors'),]
+nhood_df$tissue_domain <- gsub("PDAC_PanIN", "PanIN/GLTumor", nhood_df$tissue_domain)
+nhood_df$tissue_domain <- gsub("PDAC_PDTumor", "PDTumor", nhood_df$tissue_domain)
+nhood_df$tissue_domain <- factor(nhood_df$tissue_domain, levels = c("Healthy_Ducts", "Healthy_PanIN",
+                                                                    "PDAC_Ducts", "PanIN/GLTumor", "PDTumor"))
+comparisons <- combn(unique(as.character(nhood_df$tissue_domain)), 2, simplify = F)
+
+plasma <- nhood_df %>% filter(nhood == 'Immune(Plasma_Cells)')
+plasma_boxplot <- ggboxplot(plasma, x = 'tissue_domain', y = 'fraction', fill = 'domain', outlier.shape = NA) +
+  stat_compare_means(method = 'wilcox.test', comparisons = comparisons[c(1,2,3,4,5)], hide.ns = T) +
+  theme_bw(base_size = 10) +
+  # theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  NoLegend() +
+  xlab(NULL) +
+  ylab("Plasma Fraction in 150\u00B5 Neighborhood") +
+  scale_fill_manual(values = c("Ducts_nbors" = "#984EA3", "PanIN_nbors" = "#F29403", "PDTumor_nbors" = "#F781BF"))
+ggsave("Nhood_PlasmaBoxPlot.pdf", plasma_boxplot, width = 5, height = 5, units = 'in', dpi = 1200)
+
+macs <- nhood_df %>% filter(nhood == 'Macrophages')
+macs_boxplot <- ggboxplot(macs, x = 'tissue_domain', y = 'fraction', fill = 'domain', outlier.shape = NA) +
+  stat_compare_means(method = 'wilcox.test', comparisons = comparisons[c(2,3,5,6,8,9,10)], hide.ns = T) +
+  theme_bw() +
+  NoLegend() +
+  xlab(NULL) + ylab("Macrophages Fraction in 150\u00B5 Neighborhood") +
+  scale_fill_manual(values = c("Ducts_nbors" = "#984EA3", "PanIN_nbors" = "#F29403", "PDTumor_nbors" = "#F781BF"))
+ggsave("Nhood_MacsBoxPlot.pdf", macs_boxplot, width = 5, height = 5, units = 'in', dpi = 1200)
+
+# SpatialDimPlot Plasma + Macs ----------------------------------------------------------
+
+spatial@meta.data <- mutate(spatial@meta.data, annotation = ifelse(main_annotation %in% c("Ducts", "PDTumor", "PanIN/GLTumor", "Plasma_Cells", "Macrophages"), as.character(main_annotation), "Other"))
+spatial$annotation <- factor(spatial$annotation, levels = c("Ducts","PanIN/GLTumor", "PDTumor", "Plasma_Cells", "Macrophages", "Other"))
+
+immune_gol <- SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = c("AJGG315_C2")) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1))
+immune_pdac <- SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 5, cols = c(cols, "Other" = 'lightgrey'), images = c("SU.19.53682_B9")) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1))
+immune_combined <- wrap_plots(immune_gol+ NoLegend(), immune_pdac + NoLegend())
+ggsave("immune_combined_dimplot.pdf", immune_combined, height = 5, width = 10, dpi = 1200)
+immune_combined_legend <- get_legend(DimPlot(spatial, group.by = 'annotation', cols = c(cols, "Other" = 'lightgrey')))
+ggsave("immune_combined_dimplot_legend.pdf", immune_combined_legend, height = 5, width = 2, dpi = 1200)
+
+rest_gol <- c("AIH3216_C1", "AIJK200_C1", "AKJD206_C1", "AJJB111_B1")
+rest_PDAC <- c("SU.22.1926_A3", "SU.22.3416_A8", "SU.21.54126_D2", "SU.21.56758_I10", "SU.21.2784_B15", "SU.22.3416_A1")
+rest_AdjNorm <- c("SU.21.56768_E18", "SU.21.63367_AF52")
+
+rest_immune <- lapply(c(rest_gol, rest_PDAC, rest_AdjNorm), function(x){
+  SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = x) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1)) + NoLegend()
+})
+rest_immune <- wrap_plots(rest_immune, ncol = 4)
+ggsave("immune_rest.pdf", rest_immune, height = 15, width = 20, dpi = 1200)
+
+
+rest_immune_gol <- lapply(rest_gol, function(x){
+  SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = x) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1)) + NoLegend()
+})
+rest_immune_gol <- wrap_plots(rest_immune_gol, nrow = 1)
+ggsave("immune_rest_gol.pdf", rest_immune_gol, height = 5, width = 20, dpi = 1200)
+
+rest_immune_pdac <- lapply(rest_PDAC, function(x){
+  SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = x) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1)) + NoLegend()
+})
+rest_immune_pdac <- wrap_plots(rest_immune_pdac, nrow = 2)
+ggsave("immune_rest_pdac.pdf", rest_immune_pdac, height = 10, width = 20, dpi = 1200)
+
+rest_immune_AdjNorm <- lapply(rest_AdjNorm, function(x){
+  SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = x) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1)) + NoLegend()
+})
+rest_immune_AdjNorm <- wrap_plots(rest_immune_AdjNorm, nrow = 1)
+ggsave("immune_rest_Adjnorm.pdf", rest_immune_AdjNorm, height = 10, width = 20, dpi = 1200)
+
+# SpatialDimPlot TLS ----------------------------------------------------------
+
+spatial@meta.data <- mutate(spatial@meta.data, annotation = ifelse(main_annotation %in% c("PDTumor", "PanIN/GLTumor", "TLS"), as.character(main_annotation), "Other"))
+spatial$annotation <- factor(spatial$annotation, levels = c("PanIN/GLTumor", "PDTumor", "TLS", "Other"))
+tls_gol <- SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = c("AJGG315_C2")) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1))
+tls_pdac <- SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 5, cols = c(cols, "Other" = 'lightgrey'), images = c("SU.19.53682_B9")) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1))
+tls_combined <- wrap_plots(tls_gol+ NoLegend(), tls_pdac + NoLegend())
+ggsave("tls_combined_dimplot.pdf", tls_combined, height = 5, width = 10, dpi = 1200)
+tls_combined_legend <- get_legend(DimPlot(spatial, group.by = 'annotation', cols = c(cols, "Other" = 'lightgrey')))
+ggsave("tls_combined_dimplot_legend.pdf", tls_combined_legend, height = 5, width = 2, dpi = 1200)
+
+rest_tls <- lapply(c(rest_gol, rest_PDAC, rest_AdjNorm), function(x){
+  SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = x) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1)) + NoLegend()
+})
+rest_tls <- wrap_plots(rest_tls, ncol = 4)
+ggsave("tls_rest.pdf", rest_tls, height = 15, width = 20, dpi = 1200)
+
+rest_gol <- c("AIH3216_C1", "AIJK200_C1", "AKJD206_C1", "AJJB111_B1")
+rest_tls_gol <- lapply(rest_gol, function(x){
+  SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = x) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1)) + NoLegend()
+})
+rest_tls_gol <- wrap_plots(rest_tls_gol, nrow = 1)
+ggsave("tls_rest_gol.pdf", rest_tls_gol, height = 5, width = 20, dpi = 1200)
+
+rest_PDAC <- c("SU.22.1926_A3", "SU.22.3416_A8", "SU.21.54126_D2", "SU.21.56758_I10", "SU.21.2784_B15", "SU.22.3416_A1")
+rest_tls_pdac <- lapply(rest_PDAC, function(x){
+  SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = x) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1)) + NoLegend()
+})
+rest_tls_pdac <- wrap_plots(rest_tls_pdac, nrow = 2)
+ggsave("tls_rest_pdac.pdf", rest_tls_pdac, height = 10, width = 20, dpi = 1200)
+
+rest_AdjNorm <- c("SU.21.56768_E18", "SU.21.63367_AF52")
+rest_tls_AdjNorm <- lapply(rest_AdjNorm, function(x){
+  SpatialDimPlot(spatial, group.by = 'annotation', image.alpha = 0, pt.size.factor = 3, cols = c(cols, "Other" = 'lightgrey'), images = x) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1)) + NoLegend()
+})
+rest_tls_AdjNorm <- wrap_plots(rest_tls_AdjNorm, nrow = 1)
+ggsave("tls_rest_Adjnorm.pdf", rest_tls_AdjNorm, height = 10, width = 20, dpi = 1200)
+
+# CCLs ViolinPlot --------------------------------------------------------
+
+ccls_exp <- VlnPlot2(spatial, c("CCL19", "CCL5", "CCL21"), group.by = 'main_annotation', pt = F, box = F, cols = cols, ncol = 1) +
+  theme_classic(base_size = 10) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  NoLegend()
+ggsave("ccls_exp.pdf", ccls_exp, width = 4, height = 5, units = 'in', dpi = 600)
+
+# CCLs Moran --------------------------------------------------------------
+
+DefaultAssay(tumor_moran) <- 'LRMoran'
+ccl_ccr_vlnplot <- VlnPlot2(tumor_moran, features = c('CCL19^CCR7', 'CCL5^CCR4', 'CCL21^CCR7'),
+                            group.by = 'main_annotation', pt = F, box = F, ncol = 1) +
+  theme_classic(base_size = 10) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  NoLegend()
+ggsave("ccl_ccr_vlnplot.pdf", ccl_ccr_vlnplot, width = 4, height = 5, units = 'in', dpi = 600)
+
+
+
+DefaultAssay(tumor_moran) <- 'LRMoran'
+ccl19_ccr7_pdac <- SpatialFeaturePlot(tumor_moran, features = c('CCL19^CCR7'), image.alpha = 0, pt.size.factor = 5, images = c("SU.19.53682_B9")) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1))
+ggsave("ccl19_ccr7_pdac.pdf", ccl19_ccr7_pdac, height = 5, width = 10, dpi = 1200)
+
+other_ccl_ccr <- c('CCL21^CCR7', 'CCL5^CCR4')
+other_ccl_ccr_pdac <- lapply(other_ccl_ccr, function(x){
+  SpatialFeaturePlot(tumor_moran, features = x, image.alpha = 0, pt.size.factor = 5, images = c("SU.19.53682_B9")) + scale_y_reverse() + theme(panel.border = element_rect(colour = 'black', fill = NA, linewidth = 1))
+})
+other_ccl_ccr_pdac <- wrap_plots(other_ccl_ccr_pdac, nrow = 1)
+ggsave("other_ccl_ccr_pdac.pdf", other_ccl_ccr_pdac, height = 5, width = 10, dpi = 1200)
+
+# CCL_CCR_DotPlot_scRef ---------------------------------------------------
+
+scRef$main_annotation_scvi <- gsub("T_Cells\\(Hi_Ribo\\)", "T_Cells", scRef$main_annotation_scvi)
+scRef[['Cell Type']] <- factor(scRef$main_annotation_scvi,
+                               levels = c("CHRM3+","Acinar", "Acinar/ADM", "ADM", "Ducts", "Tumor_Epithelial",
+                                          "Macrophages", "Granulocytes", "T_Cells", "NK_Cells",
+                                          "B_Cells","Plasma", "Mast_Cells",
+                                          "Endothelial", "Lymphatic_Endothelial", "Endocrine",
+                                          "Fibroblasts","Pericytes",
+                                          "Neurons","Muscle"))
+
+features <- list("Chemokine" = c("CCL19", "CCL21", "CCL5"), "Receptors" = c("CCR7", "CCR4"))
+scRef_CCL_CCR_dotplot <- DotPlot2(scRef, features = features, group.by = 'Cell Type', color_scheme = 'RdYlBu-rev')
+ggsave("scRef_CCL_CCR_dotplot.pdf", scRef_CCL_CCR_dotplot + NoLegend(), width = 5, height = 3, units = 'in', dpi = 600)
+
+scRef_CCL_CCR_dotplot_legend <- get_legend(scRef_CCL_CCR_dotplot)
+ggsave("scRef_CCL_CCR_dotplot_legend.pdf", scRef_CCL_CCR_dotplot_legend, width = 2, height = 6, units = 'in', dpi = 600)
+
+# Nhood Histogram Healthy -------------------------------------------------------------------
+gol_samples_nhood <- ggplot(gol_Nhood_Dist, aes(x = sample_id, y = fraction, fill = nhood)) +
+  geom_bar(stat = 'identity') +
+  facet_wrap(~ domain) +
+  scale_fill_manual(values = cols) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("final_figures/gol_samples_nhood_histogram.pdf", gol_samples_nhood, width = 10, height = 5, units = 'in', dpi = 1200)
+
+# Nhood Histogram Tumor -------------------------------------------------------------------
+tumor_samples_nhood <- ggplot(tumor_Nhood_Dist, aes(x = sample_id, y = fraction, fill = nhood)) +
+  geom_bar(stat = 'identity') +
+  facet_wrap(~ domain) +
+  scale_fill_manual(values = cols) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("final_figures/tumor_samples_nhood_histogram.pdf", tumor_samples_nhood, width = 15, height = 5, units = 'in', dpi = 1200)
+```

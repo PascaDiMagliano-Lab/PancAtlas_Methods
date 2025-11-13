@@ -1,0 +1,136 @@
+---
+title: "Macrophages Subpopulation Analysis"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+This section focuses on a detailed sub-analysis of the macrophages population. We subset the macrophages cells from the main dataset, reclustered them to identify distinct macrophages subtypes.
+
+
+## 1 Setup and Environment Configuration
+
+```{r}
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SeuratWrappers)
+  library(tidyverse)
+  library(scCustomize)
+  library(CellChat)
+  library(slurmR)
+  library(tidyverse)
+  library(reticulate)
+  library(qs)
+  library(clustree)
+  library(org.Hs.eg.db)
+  library(Seurat)
+  library(slurmR)
+  library(cowplot)
+  library(tidyverse)
+  library(pheatmap)
+  library(qs)
+})
+
+ref <- qread("../outputs/scRNAseq_Analysis/scRef.qs")
+```
+
+## 2 Subset and Re-cluster Macrophages
+
+```{r}
+macs <- subset(ref, subset = main_annotation_scvi == 'Macrophages')
+macs <- RunUMAP(macs, reduction = 'integrated.scvi', dims = 1:30)
+macs <- FindNeighbors(macs, reduction = 'integrated.scvi', dims = 1:30)
+res <- seq(from = 0.05, to = 1, by = 0.05)
+for(x in res){
+  macs <- FindClusters(macs, resolution = x, cluster.name = paste0("res.",x))
+}
+clustree(macs, prefix = 'res.', layout = "sugiyama")
+macs <- FindClusters(macs, resolution = 0.35)
+```
+
+## 3 Annotate Macrophages Subtypes
+
+```{r}
+
+DimPlot_scCustom(macs)
+FeaturePlot(macs, features = c("CD14", 'APOE', 'MARCO', 'CCR2', 'CD68', 'C1QA', 'FCGR3A', 'FCGR3B', 'SPP1', 'IL1B', 'HBEGF', 'VEGFA'))
+Idents(macs) <- macs$seurat_clusters
+
+markers <- FindAllMarkers(macs)
+markers$scores <- markers$avg_log2FC * markers$pct.1
+
+DotPlot_scCustom(macs, features = unique(top_markers), group.by = 'seurat_clusters', flip_axes = T) +
+  theme(axis.text.y = element_text(size = 9, face = 'bold'),
+        axis.text.x = element_text(size = 9, face = 'bold'))
+
+new_idents <- c('0' = 'Classical_Macs',
+                '1' = 'Resident_Macs',
+                '2' = 'THBS1+_Macs',
+                '3' = 'AltAct_Macs',
+                '4' = 'AltAct_Macs',
+                '5' = 'AltAct_Macs',
+                '6' = 'Resident_Macs',
+                '7' = 'Classical_Macs',
+                '8' = 'Nonclassical_Macs',
+                '9' = 'AltAct_Macs',
+                '10' = 'Dendritic',
+                '11' = 'Cycling_Macs',
+                '12' = 'Nonclassical_Macs',
+                '13' = 'T_Cells_Doublets',
+                '14' = 'RBCs')
+
+macs <- RenameIdents(macs, new_idents)
+macs$macs_subtypes <- Idents(macs)
+
+macs <- macs[, !(macs$macs_subtypes %in% c("T_Cells_Doublets", "RBCs"))]
+macs <- RunUMAP(macs, reduction = 'integrated.scvi', dims = 1:30)
+
+macs$macs_subtypes <- factor(macs$macs_subtypes, levels = c("Classical_Macs", 
+                                                            "Nonclassical_Macs",
+                                                            "Resident_Macs", 
+                                                            "AltAct_Macs", 
+                                                            "Cycling_Macs",
+                                                            "THBS1+_Macs",
+                                                            "Dendritic"))
+
+markers <- FindAllMarkers(macs, group.by = 'macs_subtypes')
+markers$scores <- markers$avg_log2FC * markers$pct.1
+macs@misc$markers <- markers
+
+qsave(macs, "../outputs/scRNAseq_Analysis/scRef_macs.qs")
+```
+
+```{r}
+#| include : false 
+#| eval: false
+ref <- qread("../outputs/scRNAseq_Analysis/scRef_macs.qs")
+```
+
+```{r}
+#| eval: false
+DimPlot2(macs)
+
+features <- c("S100A8", "S100A9", "LYZ", "FCN1",
+              "FCGR3A", "IFITM2", "IFITM3",
+              "C1QA", "C1QB", "CCL4",
+              "APOE", "MARCO", "SPP1",
+              "MKI67","TOP2A",
+              "THBS1","AREG","EREG",
+              "HLA-DRA", "CD74", "CLEC9A", "IDO1")
+
+DotPlot2(macs, features = features, group.by = 'macs_subtypes', color_scheme = 'RdYlBu-rev', flip = T) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+#| eval: false
+sessionInfo()
+```

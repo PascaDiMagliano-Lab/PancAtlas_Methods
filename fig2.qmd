@@ -1,0 +1,936 @@
+---
+title: "Figure 2"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SeuratExtend)
+  library(CellChat)
+  library(BayesPrism)
+  library(tidyverse)
+  library(EnhancedVolcano)
+  library(qs)
+  library(SPATA2)
+  library(patchwork)
+  library(pheatmap)
+  library(numbat)
+  library(cowplot)
+})
+
+dir.create("final_figures", showWarnings = F, recursive = T)
+RdYlBu_scale <- scale_color_gradientn(colors = c("blue", "yellow", "red"))
+
+scRef <- qread("../outputs/scRNAseq_Analysis/scRef.qs")
+clone_profiles <- read.table(
+  "../outputs/scRNAseq_Analysis/Numbat_Analysis/clone_profile.txt",
+  header = T,
+  sep = '\t'
+)
+spatial <- qread(
+  "../outputs/Spatial_Clustering/tumor_tumoradj_GoL_samples_annotated_v2_lite_new_deconv.qs"
+)
+da_results <- qread("../outputs/Spatial_Clustering/spatial_milo_da_results.qs")
+tumor_spata2 <- qread(
+  "../outputs/Spatial_Clustering/tumor_sample_spata2_object.qs"
+)
+gol_spata2 <- qread("../outputs/Spatial_Clustering/gol_sample_spata2_object.qs")
+
+NoTicks <- theme(
+  axis.ticks = element_blank(),
+  axis.text = element_blank(),
+  axis.title = element_blank()
+)
+breaks <- str_c(0:20, "mm")
+cols <- scPalette(length(levels(spatial$main_annotation)))
+names(cols) <- levels(spatial$main_annotation)
+tumor_axes <- ggpLayerAxesSI(
+  tumor_spata2,
+  unit = "mm",
+  breaks = breaks,
+  add_labs = F
+)
+tumor_scalebar <- ggpLayerScaleBarSI(
+  tumor_spata2,
+  sb_dist = "1mm",
+  text_size = 3,
+  sgmt_size = 0.5
+)
+gol_axes <- ggpLayerAxesSI(
+  gol_spata2,
+  unit = "mm",
+  breaks = breaks,
+  add_labs = F
+)
+gol_scalebar <- ggpLayerScaleBarSI(
+  gol_spata2,
+  sb_dist = "1mm",
+  text_size = 3,
+  sgmt_size = 0.5
+)
+thin_margin <- theme(plot.margin = unit(c(0, 0, 0, 0), "in"))
+pt_size = 0.1
+
+# scRNAseq_UMAP -----------------------------------------------------------------
+scRef$main_annotation_scvi <- gsub(
+  "T_Cells\\(Hi_Ribo\\)",
+  "T_Cells",
+  scRef$main_annotation_scvi
+)
+scRef[['Cell Type']] <- factor(
+  scRef$main_annotation_scvi,
+  levels = c(
+    "CHRM3+",
+    "Acinar",
+    "Acinar/ADM",
+    "ADM",
+    "Ducts",
+    "Tumor_Epithelial",
+    "Macrophages",
+    "Granulocytes",
+    "T_Cells",
+    "NK_Cells",
+    "B_Cells",
+    "Plasma",
+    "Mast_Cells",
+    "Endothelial",
+    "Lymphatic_Endothelial",
+    "Endocrine",
+    "Fibroblasts",
+    "Pericytes",
+    "Neurons",
+    "Muscle"
+  )
+)
+scRef[['tissue']] <- factor(
+  scRef$tissue,
+  levels = c("Healthy", "AdjNormal", "PDAC")
+)
+scCols <- color_iwh(
+  n = length(levels(scRef$`Cell Type`)),
+  col.space = 'intense'
+)
+names(scCols) <- levels(scRef$`Cell Type`)
+
+all_cells_dimplot <- DimPlot(
+  scRef,
+  group.by = "Cell Type",
+  reduction = 'umap.scvi',
+  split.by = 'tissue',
+  cols = scCols,
+  raster = T,
+  raster.dpi = c(1200, 1200),
+  pt.size = 3
+) +
+  ggtitle(NULL) +
+  NoAxes() +
+  ggtitle("Pancreas scRNAseq Atlas (208282 cells)") +
+  NoLegend()
+ggsave(
+  "all_cells_dimplot.pdf",
+  all_cells_dimplot,
+  width = 15,
+  height = 5,
+  dpi = 1200
+)
+
+all_cells_dimplot_legend <- get_legend(
+  DimPlot(
+    scRef,
+    group.by = "Cell Type",
+    reduction = 'umap.scvi',
+    cols = scCols,
+    raster = T,
+    raster.dpi = c(1200, 1200),
+    pt.size = 3
+  ) +
+    guides(color = guide_legend(ncol = 1))
+)
+ggsave(
+  "all_cells_dimplot_legend.pdf",
+  all_cells_dimplot_legend,
+  width = 2,
+  height = 5,
+  dpi = 1200
+)
+
+# Numbat_FeaturePlot -----------------------------------------------------------------
+
+tumor <- subset(scRef, subset = tissue == 'PDAC')
+tumor$joint_cnv_prop[is.na(tumor$joint_cnv_prop)] <- 0
+
+numbat_fp <- FeaturePlot(
+  tumor,
+  features = "joint_cnv_prop",
+  reduction = 'umap.scvi',
+  raster = T,
+  raster.dpi = c(1200, 1200),
+  cols = c("navy", "red3"),
+  pt.size = 2
+) +
+  NoAxes() +
+  ggtitle("Joint CNV Probability")
+ggsave("Numbat_FeaturePlot.pdf", numbat_fp, width = 5, height = 5, dpi = 1200)
+
+# Combined_HE -----------------------------------------------------------------
+
+tumor_he <- plotSurface(tumor_spata2, pt_alpha = 0) +
+  tumor_scalebar +
+  NoTicks +
+  thin_margin
+gol_he <- plotSurface(gol_spata2, pt_alpha = 0) +
+  gol_scalebar +
+  NoTicks +
+  thin_margin
+combined_he <- wrap_plots(list(gol_he, tumor_he), nrow = 2, ncol = 1) &
+  theme(plot.margin = margin(0, 0, 0, 0))
+ggsave(
+  "Combined_HE.pdf",
+  combined_he,
+  width = 1.5,
+  height = 4,
+  units = 'in',
+  dpi = 2400
+)
+
+# Combined_Deconv_FeaturePlot -----------------------------------------------------------------
+tumor_acinar <- plotSurface(
+  tumor_spata2,
+  color_by = 'Acinar',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_epi <- plotSurface(
+  tumor_spata2,
+  color_by = 'Tumor Epithelial',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_ducts <- plotSurface(
+  tumor_spata2,
+  color_by = 'Ducts',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_fibro <- plotSurface(
+  tumor_spata2,
+  color_by = 'Fibroblasts',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+
+gol_acinar <- plotSurface(
+  gol_spata2,
+  color_by = 'Acinar',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_epi <- plotSurface(
+  gol_spata2,
+  color_by = 'Tumor Epithelial',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_ducts <- plotSurface(
+  gol_spata2,
+  color_by = 'Ducts',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_fibro <- plotSurface(
+  gol_spata2,
+  color_by = 'Fibroblasts',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+
+plot_list <- list(
+  gol_acinar,
+  gol_epi,
+  gol_ducts,
+  gol_fibro,
+  tumor_acinar,
+  tumor_epi,
+  tumor_ducts,
+  tumor_fibro
+)
+combined_deconv <- wrap_plots(plot_list, nrow = 2, ncol = 4) &
+  theme(plot.margin = margin(0, 0, 0, 0))
+ggsave(
+  "Combined_Deconv_FeaturePlot.pdf",
+  combined_deconv,
+  width = 6,
+  height = 4,
+  units = 'in',
+  dpi = 1200
+)
+
+legend <- get_legend(
+  plotSurface(
+    tumor_spata2,
+    color_by = 'Acinar',
+    pt_size = pt_size,
+    pt_alpha = 1
+  ) +
+    RdYlBu_scale +
+    labs(color = "Cell Type Fraction")
+)
+ggsave(
+  "Combined_Deconv_FeaturePlot_legend.pdf",
+  legend,
+  width = 2,
+  height = 4,
+  units = 'in',
+  dpi = 1200
+)
+
+# Combined_SpatialClusters_SpatialDimPlot -----------------------------------------------------------------
+tumor_annotation <- plotSurface(
+  tumor_spata2,
+  color_by = "main_annotation",
+  clrp_adjust = cols,
+  pt_size = 0.2
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin
+gol_annotation <- plotSurface(
+  gol_spata2,
+  color_by = "main_annotation",
+  clrp_adjust = cols,
+  pt_size = 0.2
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin
+domain_cols <- cols
+names(domain_cols) <- levels(spatial$domains)
+legend <- get_legend(plotSurface(
+  gol_spata2,
+  color_by = "domains",
+  clrp_adjust = domain_cols,
+  pt_size = 0.2
+))
+combined_annotation <- wrap_plots(
+  list(gol_annotation, tumor_annotation),
+  nrow = 1,
+  ncol = 2
+) &
+  theme(plot.margin = margin(0, 0, 0, 0))
+ggsave(
+  "Combined_SpatialClusters_SpatialDimPlot.pdf",
+  combined_annotation,
+  width = 6,
+  height = 3,
+  units = 'in',
+  dpi = 1200
+)
+ggsave(
+  "Combined_SpatialClusters_SpatialDimPlot_legend.pdf",
+  legend,
+  width = 1,
+  height = 5,
+  units = 'in',
+  dpi = 1200
+)
+
+# Deconvolution_ViolinPlot -----------------------------------------------------------------
+
+DefaultAssay(spatial) <- 'RCTD_sub_wts'
+features <- c(
+  "Acinar",
+  "Acinar/ADM",
+  "Ducts",
+  "Tumor-Epithelial",
+  "Fibroblasts",
+  "Pericytes",
+  "Endocrine",
+  "Neurons",
+  "T-Cells",
+  "B-Cells",
+  "Plasma",
+  "Macrophages"
+)
+vlnplot_deconv <- VlnPlot(
+  spatial,
+  features = features,
+  cols = scCols,
+  fill.by = 'feature',
+  group.by = 'main_annotation',
+  pt.size = 0,
+  same.y.lims = T,
+  stack = T,
+  flip = T
+) +
+  ggtitle(NULL) +
+  NoLegend() +
+  xlab(NULL) +
+  ylab("Cell Type Fraction")
+ggsave(
+  "Deconvolution_ViolinPlot.pdf",
+  vlnplot_deconv,
+  width = 12,
+  height = 8,
+  units = 'in',
+  dpi = 1200
+)
+
+# SpatialClusters_UMAP -----------------------------------------------------------------
+
+domains_col <- scPalette(length(levels(spatial$domain_annotation)))
+names(domains_col) <- levels(spatial$domain_annotation)
+
+all_spatial_spots_dimplot <- DimPlot(
+  spatial,
+  group.by = "domain_annotation",
+  cols = domains_col,
+  raster = T,
+  raster.dpi = c(1200, 1200),
+  pt.size = 2
+) +
+  ggtitle(NULL) +
+  NoAxes() +
+  ggtitle("Spatial Domains (164198 spots)") +
+  NoLegend()
+ggsave(
+  "all_cells_dimplot.pdf",
+  all_spatial_spots_dimplot,
+  width = 5,
+  height = 5,
+  dpi = 1200
+)
+
+all_spatial_spots_dimplot_legend <- get_legend(
+  DimPlot(
+    spatial,
+    group.by = "domain_annotation",
+    cols = domains_col,
+    raster = T,
+    raster.dpi = c(1200, 1200),
+    pt.size = 2
+  ) +
+    guides(color = guide_legend(ncol = 1))
+)
+ggsave(
+  "all_spatial_spots_dimplot_legend.pdf",
+  all_spatial_spots_dimplot_legend,
+  width = 2,
+  height = 5,
+  dpi = 1200
+)
+
+# SpatialClusters_Histogram --------------------------------------------------------------------
+spatial$tissue <- factor(
+  spatial$tissue,
+  levels = c("Healthy", "AdjNormal", "PDAC")
+)
+spatial_histogram_tissue <- ClusterDistrBar(
+  spatial$tissue,
+  spatial$domain_annotation,
+  cols = domains_col,
+  flip = T,
+  border = 'white',
+  reverse_order = F
+) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab(NULL) +
+  labs(fill = "Spatial Domain") +
+  NoLegend()
+ggsave(
+  "SpatialClusters_Histogram.pdf",
+  spatial_histogram_tissue,
+  width = 10,
+  height = 3,
+  dpi = 300
+)
+
+# SpatialClusters_BeeswarmPlot -----------------------------------------------------------------
+beeswarm_plot <- plotDAbeeswarm(
+  da_results,
+  group.by = "domain_annotation",
+  alpha = 0.1
+) +
+  ylab("\u2190 Enriched in Healthy | Enriched in PDAC \u2192") +
+  xlab("") +
+  scale_color_distiller(palette = "RdBu", direction = -1) +
+  facet_wrap(~category, scales = 'free_y', ncol = 1)
+ggsave(
+  "SpatialClusters_BeeswarmPlot.pdf",
+  beeswarm_plot,
+  width = 12,
+  height = 9,
+  units = 'in',
+  dpi = 1200
+)
+
+# scRNAseq_markers_DotPlot -----------------------------------------------------------------
+features <- list(
+  'Acinar/ADM Markers' = c(
+    "CHRM3",
+    "MECOM",
+    "PRSS1",
+    "SPINK1",
+    "AMY2A",
+    "FXYD2",
+    "CFTR",
+    "AQP1",
+    "BICC1"
+  ),
+  'Ductal/Tumor Markers' = c(
+    "MUC6",
+    "SOX9",
+    "MUC5B",
+    "CRISP3",
+    "MSLN",
+    "CEACAM6",
+    "KRT19",
+    "KRT17",
+    "LAMB3",
+    "GPRC5A",
+    "KLK10"
+  ),
+  'Immune Stroma Markers' = c(
+    "APOE",
+    "CD68",
+    "S100A8",
+    "S100A9",
+    "FCGR3B",
+    "CSF3R",
+    "CD3E",
+    "IL7R",
+    "NKG7",
+    "GNLY",
+    "MS4A1",
+    "CD79A",
+    "JCHAIN",
+    "IGKC"
+  ),
+  'Non-immune Stroma Markers' = c(
+    "CPA3",
+    "TPSAB1",
+    "VWF",
+    "CDH5",
+    "NTS",
+    "MMRN1",
+    "PKHD1L1",
+    "INS",
+    "GCG",
+    "CHGA",
+    "PDGFRA",
+    "COL1A1",
+    "LUM",
+    "DCN",
+    "RGS5",
+    "TAGLN",
+    "PLP1",
+    "NRXN1",
+    "NCAM2",
+    "TRDN",
+    "MYBPC1",
+    "NEB"
+  )
+)
+
+markers_dotplot <- DotPlot2(
+  scRef,
+  features = features,
+  flip = T,
+  color_scheme = 'RdYlBu-rev',
+  group.by = 'Cell Type'
+)
+ggsave(
+  "scRNAseq_markers_DotPlot.pdf",
+  markers_dotplot,
+  width = 15,
+  height = 5,
+  dpi = 300
+)
+
+# scRNAseq_Tissue_Histogram -----------------------------------------------------------------
+histogram_tissue <- ClusterDistrBar(
+  scRef$tissue,
+  scRef$`Cell Type`,
+  cols = 'iwh_intense',
+  flip = F,
+  border = 'white',
+  reverse_order = F
+) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave(
+  "scRNAseq_Tissue_Histogram.pdf",
+  histogram_tissue + NoLegend(),
+  width = 5,
+  height = 7,
+  dpi = 300
+)
+
+# scRNAseq_Samples_Histogram -------------------------------------------------------------
+scRef$sample_id <- factor(
+  scRef$sample_id,
+  levels = unique(scRef$sample_id[order(scRef$tissue)])
+)
+histogram_samples <- ClusterDistrBar(
+  scRef$sample_id,
+  scRef$`Cell Type`,
+  cols = 'iwh_intense',
+  flip = F,
+  border = 'white',
+  reverse_order = F
+) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  guides(color = guide_legend(ncol = 1))
+ggsave(
+  "scRNAseq_Samples_Histogram.pdf",
+  histogram_samples,
+  width = 15,
+  height = 7,
+  dpi = 300
+)
+
+# Numbat_Samples_FeaturePlot ---------------------------------------------------------------
+
+tumor_samples <- SplitObject(tumor, split.by = 'sample_id')
+numbat_fp_by_sample <- lapply(tumor_samples, function(x) {
+  if (any(x$joint_cnv_prop > 0)) {
+    FeaturePlot(
+      x,
+      features = "joint_cnv_prop",
+      reduction = 'umap.scvi',
+      raster = T,
+      raster.dpi = c(1200, 1200),
+      cols = c("navy", "red3"),
+      pt.size = 3
+    ) +
+      NoAxes() +
+      ggtitle(unique(x$sample_id)) +
+      NoLegend()
+  }
+})
+
+numbat_fp_by_sample <- numbat_fp_by_sample[
+  !unlist(lapply(numbat_fp_by_sample, is.null))
+]
+numbat_fp_by_sample <- wrap_plots(numbat_fp_by_sample, ncol = 4)
+
+ggsave(
+  "Numbat_Samples_FeaturePlot.pdf",
+  numbat_fp_by_sample,
+  width = 15,
+  height = 10,
+  dpi = 300
+)
+
+# Numbat_Clones_Heatmap ---------------------------------------------------------------
+cnv_heatmap <- cnv_heatmap(clone_profiles, var = 'sample_clone')
+ggsave(
+  "Numbat_Clones_Heatmap.pdf",
+  cnv_heatmap,
+  width = 20,
+  height = 10,
+  dpi = 300
+)
+
+# Supp_Combined_Deconv_FeaturePlot -------------------------------------------------------------
+
+tumor_macs <- plotSurface(
+  tumor_spata2,
+  color_by = 'Macrophages',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_tcells <- plotSurface(
+  tumor_spata2,
+  color_by = 'T-Cells',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_bcells <- plotSurface(
+  tumor_spata2,
+  color_by = 'B-Cells',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_plasma <- plotSurface(
+  tumor_spata2,
+  color_by = 'Plasma',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_endocrine <- plotSurface(
+  tumor_spata2,
+  color_by = 'Endocrine',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_pericytes <- plotSurface(
+  tumor_spata2,
+  color_by = 'Pericytes',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+tumor_neurons <- plotSurface(
+  tumor_spata2,
+  color_by = 'Neurons',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+
+gol_macs <- plotSurface(
+  gol_spata2,
+  color_by = 'Macrophages',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_tcells <- plotSurface(
+  gol_spata2,
+  color_by = 'T-Cells',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_bcells <- plotSurface(
+  gol_spata2,
+  color_by = 'B-Cells',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_plasma <- plotSurface(
+  gol_spata2,
+  color_by = 'Plasma',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_endocrine <- plotSurface(
+  gol_spata2,
+  color_by = 'Endocrine',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_pericytes <- plotSurface(
+  gol_spata2,
+  color_by = 'Pericytes',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+gol_neurons <- plotSurface(
+  gol_spata2,
+  color_by = 'Neurons',
+  pt_size = pt_size,
+  pt_alpha = 1
+) +
+  NoTicks +
+  NoLegend() +
+  thin_margin +
+  RdYlBu_scale
+
+plot_list <- list(
+  gol_macs,
+  gol_tcells,
+  gol_bcells,
+  gol_plasma,
+  gol_endocrine,
+  gol_pericytes,
+  gol_neurons,
+  tumor_macs,
+  tumor_tcells,
+  tumor_bcells,
+  tumor_plasma,
+  tumor_endocrine,
+  tumor_pericytes,
+  tumor_neurons
+)
+combined_deconv <- wrap_plots(plot_list, nrow = 2, ncol = 7) &
+  theme(plot.margin = margin(0, 0, 0, 0))
+ggsave(
+  "final_figures/Supp_Combined_Deconv_FeaturePlot.pdf",
+  combined_deconv,
+  width = 6,
+  height = 4,
+  units = 'in',
+  dpi = 1200
+)
+
+legend <- get_legend(
+  plotSurface(
+    tumor_spata2,
+    color_by = 'Macrophages',
+    pt_size = pt_size,
+    pt_alpha = 1
+  ) +
+    RdYlBu_scale +
+    labs(color = "Cell Type Fraction")
+)
+ggsave(
+  "final_figures/Supp_Combined_Deconv_FeaturePlot_legend.pdf",
+  legend,
+  width = 2,
+  height = 4,
+  units = 'in',
+  dpi = 1200
+)
+
+# SpatialClusters_Markers_DotPlot -----------------------------------------------------------------
+features_of_interest <- list(
+  "Epithelial Markers" = c(
+    "PRSS1",
+    "AMY2A",
+    "AQP1",
+    "FXYD2",
+    "CRISP3",
+    "MUC5B",
+    "MUC5AC",
+    "CLDN18",
+    "KRT17",
+    "KRT19"
+  ),
+  "Non-Immune Stroma" = c(
+    "COL1A1",
+    "PDGFRA",
+    "MMP11",
+    "CTHRC1",
+    "TAGLN",
+    "ACTA2",
+    "MYH11",
+    "RGS5",
+    "PLA2G2A",
+    "ADIPOQ",
+    "INS",
+    "GCG",
+    "NRXN1",
+    "MBP",
+    "NGFR"
+  ),
+  "Immune Stroma" = c("CD3E", "GZMK", "CD79A", "JCHAIN", "SPP1", "APOE", "CD68")
+)
+DefaultAssay(spatial) <- 'Spatial'
+spatial_dotplot <- DotPlot2(
+  spatial,
+  features = features_of_interest,
+  group.by = 'domain_annotation',
+  color_scheme = 'RdYlBu-rev',
+  flip = T,
+  show_grid = T
+)
+ggsave(
+  "SpatialClusters_Markers_DotPlot.pdf",
+  spatial_dotplot,
+  width = 10,
+  height = 5,
+  units = 'in',
+  dpi = 1200
+)
+
+# SpatialClusters_Samples_Histogram -----------------------------------------------------------------
+spatial_histogram_sample <- ClusterDistrBar(
+  spatial$sample_id,
+  spatial$domain_annotation,
+  cols = domains_col,
+  flip = F,
+  border = 'white',
+  reverse_order = F
+) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab(NULL) +
+  labs(fill = "Spatial Domain")
+ggsave(
+  "SpatialClusters_Samples_Histogram.pdf",
+  spatial_histogram_sample,
+  width = 14,
+  height = 7,
+  dpi = 300
+)
+```

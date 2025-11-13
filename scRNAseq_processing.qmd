@@ -1,0 +1,265 @@
+---
+title: "scRNAseq Data Processing and Integration"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+## 1 Setup and Environment Configuration
+
+Here, we load essential libraries and configure the `reticulate` package to use a specific Conda environment. This is crucial for running Python-based tools within the R environment. The exact conda environment used in this run can be installed using this [yml](envs/single_cell.yml) file using `conda env create -f single_cell.yml`
+
+```{r setup, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages({
+library(Seurat)
+library(SeuratWrappers)
+library(tidyverse)
+library(scCustomize)
+library(CellChat)
+library(slurmR)
+library(reticulate)
+library(qs)
+library(numbat)
+library(dplyr)
+library(data.table)
+library(stringr)
+library(glue)
+library(Matrix)
+library(unix)
+library(readxl)
+})
+
+use_condaenv("path/to/conda/envs/single_cell/", required = TRUE)
+sc <- import("scanpy", convert = F)
+anndata <- import("anndata", convert = F)
+scipy <- import('scipy', convert = F)
+```
+
+***
+
+## 2 Data Loading and Object Preparation
+
+We use Seurat V2 [@seurat]
+We define the main output directory where all results and intermediate files will be saved. We then read the `sc_samples_manifest.xlsx` from the data directory, containing metadata for each sample, which will be used to annotate the cells.
+
+We load CellBender-processed HDF5 count data for each sample using `Read_CellBender_h5_Mat` from [scCustomize](https://github.com/samuel-marsh/scCustomize) R package, iterating through all sample IDs to read the data, create Seurat objects, and append metadata such as sample ID, patient ID, and tissue type from the manifest. Cell barcodes are prefixed with their sample IDs to ensure unique identifiers across samples, and all resulting Seurat objects are then merged into a single comprehensive object named ref.
+
+```{r load_data}
+outputDir <- '../outputs/scRNAseq_Analysis/'
+dir.create(outputDir, showWarnings = F, recursive = T)
+
+samples_info <- readxl::read_xlsx("../data/sc_samples_manifest.xlsx")
+
+ref <- lapply(samples_info$sample_id, function(x) {
+  sample_info <- samples_info %>% filter(sample_id == x)
+  seurat <- Read_CellBender_h5_Mat(paste0(
+    "../outputs/scRNASeq_Analysis/cellbender/",
+    x,
+    "/",
+    x,
+    "_filtered.h5"
+  )) %>%
+    CreateSeuratObject()
+  seurat$sample_id <- x
+  seurat$patient_id <- sample_info$patient_id
+  seurat$tissue <- sample_info$tissue
+  seurat <- RenameCells(seurat, add.cell.id = x)
+  return(seurat)
+})
+ref <- reduce(ref, merge)
+ref <- JoinLayers(ref, assay = 'RNA')
+```
+
+***
+
+## 3 Quality Control and Doublet Detection
+
+### 3.1 Initial QC Metrics and Filtering
+
+We calculate the percentage of mitochondrial genes for each cell (`percent.mt`), a key quality control metric for cell quality. We also perform an initial filtering step to remove cells and genes that have zero counts across the entire dataset.
+
+```{r qc_metrics}
+ref[["percent.mt"]] <- PercentageFeatureSet(object = ref, pattern = "^MT-")
+ref <- ref[,!(colSums(GetAssayData(ref, assay = 'RNA', layer = 'counts')) == 0)]
+ref <- ref[!(rowSums(GetAssayData(ref, assay = 'RNA', layer = 'counts')) == 0),]
+```
+
+### 3.2 Doublet Detection with Scrublet
+
+We run Scrublet [@scrublet], a Python-based tool, to identify potential doublets (two or more cells captured as a single droplet). We run it on each sample separately, then the results are  transferred back to R and added as metadata to the main Seurat object.
+
+```{r scrublet}
+scrublet_res <- lapply(unique(ref$sample_id), function(x) {
+  message(x)
+  sample <- subset(ref, subset = sample_id == x)
+  adata <- anndata$AnnData(
+    X = scipy$sparse$csr_matrix(
+      Matrix::t(LayerData(sample, assay = 'RNA', layer = "counts"))
+    )
+  )
+  sc$pp$scrublet(adata)
+  scrublet_res <- py_to_r(adata$obs) %>%
+    select(doublet_score, predicted_doublet)
+  rownames(scrublet_res) <- colnames(sample)
+  scrublet_res$predicted_doublet <- unlist(scrublet_res$predicted_doublet)
+  return(scrublet_res)
+}) %>%
+  bind_rows()
+ref <- AddMetaData(ref, scrublet_res)
+```
+
+### 3.3 Apply Filters
+
+We apply standard quality control filters, removing cells with high mitochondrial content (`percent.mt < 15`) or a low number of detected features (`nFeature_RNA > 200`).
+
+```{r apply_filters}
+ref <- subset(ref, subset = percent.mt < 15 & nFeature_RNA > 200)
+```
+
+***
+
+## 4 Data Integration
+
+### 4.1 Normalization and Pre-processing
+
+Before integration, we perform standard Seurat pre-processing steps. The RNA assay is split by sample to prepare for integration, the data is log-normalized, highly variable features are identified, the data is scaled, and Principal Component Analysis (PCA) is run.
+
+```{r preprocessing}
+ref[["RNA"]] <- split(ref[["RNA"]], f = ref$sample_id)
+ref <- NormalizeData(ref)
+ref <- FindVariableFeatures(ref)
+ref <- ScaleData(ref)
+ref <- RunPCA(ref)
+```
+
+### 4.2 Integration with scVI
+
+To correct for batch effects between different samples, we perform data integration using scVI [@scvi], A deep learning-based method implemented via [`SeuratWrappers`](https://github.com/satijalab/seurat-wrappers). A new dimensional reduction slots (`integrated.scvi`) is created in the Seurat object.
+
+```{r integration}
+ref <- IntegrateLayers(
+  object = ref,
+  method = scVIIntegration,
+  conda_env = "path/to/conda/envs/single_cell/",
+  new.reduction = "integrated.scvi",
+  verbose = TRUE
+)
+```
+
+***
+
+## 5 Dimensionality Reduction and Clustering
+
+### 5.1 UMAP Embedding
+
+We then calculate UMAP (Uniform Manifold Approximation and Projection) coordinates based on the `scVI` reduction.
+
+```{r umap}
+ref <- JoinLayers(ref)
+ref <- RunUMAP(
+  ref,
+  reduction = 'integrated.scvi',
+  dims = 1:30
+)
+```
+
+### 5.2 Clustering and Annotation 
+
+Using the scVI-based reduction, we generate graph and perform graph-based clustering. A range of resolutions is tested (from 0.05 to 1.0) to explore different clustering granularities. The clustree [@clustree] R package helps visualize how cells move between clusters at different resolutions, aiding in the selection of an optimal resolution.
+
+A final clustering resolution of `0.2` is chosen. We then find markers for these clusters and load a pre-defined annotation table from an Excel file `scvi_cluster_annotation.xlsx` in `outputs/scRNAseq_Analysis/` directory, created to assign cell type labels to the clusters.
+
+```{r clustering_scvi}
+ref <- FindNeighbors(ref, reduction = 'integrated.scvi', dims = 1:30)
+res <- seq(from = 0.05, to = 1, by = 0.05)
+for (x in res) {
+  ref <- FindClusters(ref, resolution = x, cluster.name = paste0("res.", x))
+}
+clustree(ref, prefix = 'res.', layout = "sugiyama")
+ref <- FindClusters(ref, cluster.name = 'scvi_clusters', resolution = 0.2)
+ref@misc$markers_scvi <- FindAllMarkers(ref, assay = 'RNA')
+ref@misc$markers_scvi$score <- ref@misc$markers_scvi$avg_log2FC *
+  ref@misc$markers_scvi$pct.1
+
+annotation <- readxl::read_xlsx(
+  "outputs/scRNAseq_Analysis/scvi_cluster_annotation.xlsx"
+)
+CellTypes <- setNames(annotation$celltype, annotation$cluster)
+Idents(ref) <- ref$scvi_clusters
+ref <- RenameIdents(ref, CellTypes)
+ref$CellTypes <- Idents(ref)
+```
+
+## 6 Finalize Cell Type Annotations and Generate Plots
+
+### 6.1 Renaming Clusters
+
+The `CellTypes` metadata column is converted to a factor with a specific level order. This ensures that cell types appear in a consistent and logical order in all subsequent plots. A list of canonical marker genes is defined for visualization.
+
+```{r final_plots}
+ref$main_annotation_scvi <- factor(
+  ref$main_annotation_scvi,
+  levels = c(
+    "CHRM3+", "Acinar", "Acinar/ADM", "ADM", "Ducts", "Tumor_Epithelial",
+    "Macrophages", "Granulocytes", "T_Cells", "NK_Cells", "B_Cells", "Plasma", "Mast_Cells",
+    "Endothelial", "Lymphatic_Endothelial", "Endocrine", "Fibroblasts", "Pericytes",
+    "Neurons", "Muscle"))
+    
+features <- c(
+  "CHRM3","MECOM","PRSS1","SPINK1","AMY2A","SOX9","MUC6","FXYD2","CFTR","AQP1","BICC1","MUC5B","CRISP3","MSLN",
+  "CEACAM6","KRT19","KRT17","LAMB3","GPRC5A","KLK10","APOE","CD68","S100A8","S100A9","FCGR3B","CSF3R","CD3E","IL7R",
+  "NKG7","GNLY","MS4A1","CD79A","JCHAIN","IGKC","CPA3","TPSAB1","VWF","CDH5","NTS","MMRN1","PKHD1L1","INS","GCG",
+  "CHGA","PDGFRA","COL1A1","LUM","DCN","RGS5","TAGLN","PLP1","NRXN1","NCAM2","TRDN","MYBPC1","NEB"
+)
+```
+
+```{r}
+#| include : false 
+#| eval: false
+ref <- qread("objects/scRef.qs")
+```
+
+```{r}
+#| eval: false
+DimPlot_scCustom(
+  ref,
+  group.by = 'CellTypes',
+  reduction = 'umap.scvi'
+)
+DotPlot_scCustom(
+  ref,
+  features = features,
+  group.by = 'CellTypes',
+  flip_axes = T,
+  x_lab_rotate = T
+) +
+  theme(
+    axis.text.x = element_text(face = 'bold'),
+    axis.text.y = element_text(face = 'bold')
+  )
+```
+
+## 7 Save Final Annotated Object
+
+The fully processed, integrated, and annotated Seurat object is saved to a file using `qsave`. This final object can be easily loaded for any further downstream analyses.
+
+```{r save_final}
+qsave(ref, "outputs/scRNAseq_Analysis/scRef.qs")
+```
+
+The final processed file is deposited in Zenodo and can be downloaded from [here]()
+
+## 8 Session Info
+
+```{r}
+#| eval: false
+sessionInfo()
+```

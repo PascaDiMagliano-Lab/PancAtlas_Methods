@@ -1,0 +1,96 @@
+---
+title: "TCGA-PAAD Scoring"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we will use GSVA [@gsva] R package to score certain gene sets of interest in TCGA-PAAD dataset and get their correlation.
+
+## Setup and data import
+
+Seurat objects can be downloaded from Zenodo [here]().
+```{r}
+library(TCGAbiolinks)
+library(SummarizedExperiment)
+library(edgeR)
+library(qs)
+library(Seurat)
+library(GSVA)
+library(tidyverse)
+
+fibro <- qread("../outputs/scRNAseq_Analysis/scRef_fibro.qs")
+macs <- qread("../outputs/scRNAseq_Analysis/scRef_macs.qs")
+
+fibro_top_markers <-  fibro@misc$markers %>%
+  group_by(cluster) %>%
+  top_n(n = 30, wt = scores) %>%
+  dplyr::select(gene, cluster) %>%
+  split(f = .$cluster) %>%
+  lapply(pull, gene)
+fibro_top_markers <- fibro_top_markers[-7]
+
+macs_top_markers <-  macs@misc$markers %>%
+  group_by(cluster) %>%
+  top_n(n = 30, wt = scores) %>%
+  dplyr::select(gene, cluster) %>%
+  split(f = .$cluster) %>%
+  lapply(pull, gene)
+macs_top_markers <- macs_top_markers[-5]
+
+# Download TCGA-PAAD RNA-seq (raw counts)
+query <- GDCquery(project = "TCGA-PAAD",
+                  data.category = "Transcriptome Profiling",
+                  data.type = "Gene Expression Quantification",
+                  workflow.type = "STAR - Counts")
+GDCdownload(query)
+data <- GDCprepare(query)
+
+# Extract expression matrix
+expr <- assay(data, 'fpkm_uq_unstrand')
+genes <- rowData(data)$gene_name
+rownames(expr) <- genes
+keep <- setdiff(genes, unique(genes[duplicated(genes)]))
+expr <- expr[keep,]
+
+tcga_gsva_scores <- ssgseaParam(expr,
+                                # kcdf = 'Gaussian',
+                                geneSets = c(fibro_top_markers, macs_top_markers)) %>%
+  gsva() %>%
+  t()
+
+qsave(tcga_gsva_scores, "../outputs/scRNAseq_Analysis/tcga_gsva_score.qs")
+```
+
+```{r}
+#| include : false 
+#| eval: false
+tcga_gsva_scores <- qread("../outputs/scRNAseq_Analysis/tcga_gsva_score.qs")
+```
+
+```{r}
+macs_scores <- tcga_gsva_scores[,7:12]
+fibro_scores <- tcga_gsva_scores[,1:6]
+corr <- cor(fibro_scores, macs_scores, method = 'pearson')
+my_palette <- colorRampPalette(c("blue", "red"))(10)
+pheatmap(corr, color = my_palette, border_color = 'white',angle_col = 45, display_numbers = T, fontsize_number = 15, number_color = 'white')
+
+ggplot(tcga_gsva_scores, aes(x = `LRRC15+_Fibro`, y = `AltAct_Macs`)) +
+  geom_point() +
+  xlab("LRRC15+ Fibro Score") + ylab("AltAct Fibro Score") +
+  theme_bw()
+```
+
+## Session Information
+```{r}
+#| eval: false
+sessionInfo()
+```

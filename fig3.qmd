@@ -1,0 +1,629 @@
+---
+title: "Figure 3"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SeuratExtend)
+  library(CellChat)
+  library(BayesPrism)
+  library(tidyverse)
+  library(EnhancedVolcano)
+  library(qs)
+  library(SPATA2)
+  library(patchwork)
+  library(pheatmap)
+  library(numbat)
+})
+
+RdYlBu_scale <- scale_color_gradientn(colors = c("blue", "yellow", "red"))
+
+spatial <- qread("../outputs/Spatial_Clustering/tumor_tumoradj_GoL_samples_annotated_v2_lite_new_deconv.qs")
+cols <- scPalette(length(levels(spatial$main_annotation)))
+names(cols) <- levels(spatial$main_annotation)
+all_epi <- qread("../outputs/Epithelial_Analysis/all_epi_domains.qs")
+epi <- qread("../outputs/Epithelial_Analysis/epi_w_palantir_pseudotime.qs")
+epi_deseq <- qread("../outputs/Epithelial_Analysis/epi_deseq_object.qs")
+epi_aggregate <- qread("../outputs/Epithelial_Analysis/epi_aggregate.qs")
+epi_pca <- qread("../outputs/Epithelial_Analysis/epi_pca.qs")
+TumorPanIN_vs_GoLPanIN_DE <- read.csv("../outputs/Epithelial_Analysis/TumorPanIN_v_GoLPanIN_DEGs.csv", row.names = 1) %>%  rownames_to_column('gene')
+PDTumor_vs_GoLPanIN_DE <- read.csv("../outputs/Epithelial_Analysis/PDTumor_v_GoLPanIN_DEGs.csv", row.names = 1) %>%  rownames_to_column('gene')
+PDTumor_vs_TumorPanIN_DE <- read.csv("../outputs/Epithelial_Analysis/PDTumor_v_TumorPanIN_DEGs.csv", row.names = 1) %>%  rownames_to_column('gene')
+TumorPanIN_vs_GoLPanIN_GSEA <- qread("../outputs/Epithelial_Analysis/TumorPanIN_v_GoLPanIN_GSEA.qs")
+PDTumor_vs_GoLPanIN_GSEA <- qread("../outputs/Epithelial_Analysis/PDTumor_v_GoLPanIN_GSEA.qs")
+PDTumor_vs_TumorPanIN_GSEA <- qread("../outputs/Epithelial_Analysis/PDTumor_v_TumorPanIN_GSEA.qs")
+tumor_spata2 <- qread("../outputs/Misc/tumor_sample_spata2_object.qs")
+tumor_spata2_2 <- qread("../outputs/Misc/SU-21-54126_D2_tumor_sample_spata2_object.qs")
+gol_spata2 <- qread("../outputs/Misc/gol_sample_spata2_object.qs")
+gol_spata2_2 <- qread("../outputs/Misc/AJJB111_B1_gol_sample_spata2_object.qs")
+
+NoTicks <- theme(axis.ticks = element_blank(), axis.text = element_blank(), axis.title = element_blank())
+thin_margin <- theme(plot.margin = unit(c(0, 0, 0, 0), "in"))
+
+# Spatial all epi umap -----------------------------------------------------------------
+
+spatial_all_epi_umap <- DimPlot(
+  all_epi, 
+  group.by = c("main_annotation"),
+  cols = cols,
+  pt.size = 3,
+  raster = T,
+  raster.dpi = c(1200,1200)) +
+  NoAxes() +
+  NoLegend() +
+  ggtitle("Epithelial Spatial Domains") +
+  theme(legend.text = element_text(size = 9))
+ggsave("spatial_all_epi_umap.pdf", spatial_all_epi_umap, width = 3, height = 3, units = 'in', dpi = 600)
+
+spatial_all_epi_umap_legend <- get_legend(DimPlot(
+  all_epi, 
+  group.by = c("main_annotation"),
+  cols = cols,
+  pt.size = 3,
+  raster = T,
+  raster.dpi = c(1200,1200)))
+ggsave("spatial_all_epi_umap_legend.pdf", spatial_all_epi_umap_legend, width = 2, height = 2.5, units = 'in', dpi = 600)
+
+# Correlation Heatmap -----------------------------------------------------
+
+pearson_cor <- cor(as.matrix(AverageExpression(all_epi, assays = 'Spatial', layer = 'data', group.by = c('tissue', 'main_annotation'))$Spatial), method = 'pearson')
+order <- c("GoL_Acinar1", "TumorAdj_Acinar1", "Tumor_Acinar1",
+           "GoL_Acinar2", "TumorAdj_Acinar2", "Tumor_Acinar2",
+           "GoL_Acinar3","TumorAdj_Acinar3","Tumor_Acinar3",
+           "GoL_Ducts", "TumorAdj_Ducts", "Tumor_Ducts",
+           "GoL_PanIN/GLTumor", "TumorAdj_PanIN/GLTumor", "Tumor_PanIN/GLTumor",
+           "Tumor_PDTumor")
+ann <- data.frame(str_split_fixed(rownames(pearson_cor), "_", 2), row.names = rownames(pearson_cor)) %>%
+  `colnames<-`(c("Tissue", "Spatial Domain"))
+ann_cols <- list("Spatial Domain" = cols[unique(ann$`Spatial Domain`)],
+                 "Tissue" = c("GoL" = "green4", "TumorAdj" = "darkblue", Tumor = "purple"))
+pheatmap_plot <- pheatmap(pearson_cor[order, order], cluster_rows = F, cluster_cols = F, annotation_row = ann,
+                          annotation_col = ann, gaps_col = c(3, 6, 9, 12, 15), gaps_row = c(3, 6, 9, 12, 15),
+                          annotation_names_col = FALSE, annotation_names_row = FALSE,
+                          annotation_colors = ann_cols, show_rownames = F, show_colnames = F,
+                          color = colorRampPalette(c("black", "red2"))(100), fontsize = 10, 
+                          cellwidth = 15, cellheight = 15)
+ggsave("all_epi_corr_heatmap.pdf", pheatmap_plot, width = 10, height = 10, units = 'in', dpi = 600)
+
+# Basal Vs Classical Markers ----------------------------------------------
+
+classical_v_basal_markers <- list('Acinar/ADM Markers' = c("PRSS1", "AMY2A","CFTR", "AQP1"),
+                                  'Ducts Markers' = c("MUC5B", "CRISP3", "PIGR"),
+                                  'Classical Markers' = c("GATA6", "MUC1", "MUC5AC", "TFF1"),
+                                  'Basal Markers' = c("KRT6A", "KRT17", "S100A2", "LAMC2", "CAV1"))
+DefaultAssay(all_epi) <- 'Spatial'
+classical_v_basal_dotplot <- DotPlot2(all_epi,
+                                      features = classical_v_basal_markers,
+                                      group.by = 'main_annotation',
+                                      color_scheme = 'RdYlBu-rev') +
+  NoLegend()
+ggsave("classical_v_basal_dotplot.pdf", classical_v_basal_dotplot, width = 5, height = 6, units = 'in', dpi = 600)
+
+classical_v_basal_dotplot_legend <- get_legend(DotPlot2(subset(all_epi, subset = main_annotation %in% c("Ducts", "PanIN/GLTumor", "PDTumor")),
+                                                        features = classical_v_basal_markers,
+                                                        group.by = 'main_annotation',
+                                                        color_scheme = 'RdYlBu-rev'))
+ggsave("classical_v_basal_dotplot_legend.pdf", classical_v_basal_dotplot_legend, width = 2, height = 5, units = 'in', dpi = 600)
+
+# SpatialDimPlot Epithelial -----------------------------------------------
+
+tumor_spata2@meta_obs <- mutate(tumor_spata2@meta_obs, annotation = ifelse(main_annotation %in% c("Ducts", "PDTumor", "PanIN/GLTumor"), as.character(main_annotation), "Other"))
+tumor_spata2@meta_obs$annotation <- factor(tumor_spata2@meta_obs$annotation, levels = c("Ducts", "PanIN/GLTumor", "PDTumor", "Other"))
+tumor_panin_pdtumor <- plotSurface(tumor_spata2, color_by = 'annotation', display_image = F, pt_size = 0.3,
+                                   clrp_adjust = c(cols, "Other" = 'lightgrey'), pt_alpha = 1) +  thin_margin
+ggsave("tumor_panin_pdtumor.pdf", tumor_panin_pdtumor + NoLegend(), width = 3, height = 3, units = 'in', dpi = 1200)
+
+tumor_spata2_2@meta_obs <- mutate(tumor_spata2_2@meta_obs, annotation = ifelse(main_annotation %in% c("Ducts", "PDTumor", "PanIN/GLTumor"), as.character(main_annotation), "Other"))
+tumor_spata2_2@meta_obs$annotation <- factor(tumor_spata2_2@meta_obs$annotation, levels = c("Ducts", "PanIN/GLTumor", "PDTumor", "Other"))
+tumor_panin_pdtumor_2 <- plotSurface(tumor_spata2_2, color_by = 'annotation', display_image = F, pt_size = 0.3,
+                                     clrp_adjust = c(cols, "Other" = 'lightgrey'), pt_alpha = 1) +  thin_margin
+ggsave("tumor_panin_pdtumor_2.pdf", tumor_panin_pdtumor_2 + NoLegend(), width = 3, height = 3, units = 'in', dpi = 1200)
+
+gol_spata2@meta_obs <- mutate(gol_spata2@meta_obs, annotation = ifelse(main_annotation %in% c("Ducts", "PanIN/GLTumor"), as.character(main_annotation), "Other"))
+gol_spata2@meta_obs$annotation <- factor(gol_spata2@meta_obs$annotation, levels = c("Ducts", "PanIN/GLTumor", "Other"))
+gol_duct_panin <- plotSurface(gol_spata2, color_by = 'annotation', display_image = F, pt_size = 0.3,
+                              clrp_adjust = c(cols, "Other" = 'lightgrey'), pt_alpha = 1) +  thin_margin
+ggsave("gol_duct_panin.pdf", gol_duct_panin + NoLegend(), width = 3, height = 3, units = 'in', dpi = 1200)
+
+gol_spata2_2@meta_obs <- mutate(gol_spata2_2@meta_obs, annotation = ifelse(main_annotation %in% c("Ducts", "PanIN/GLTumor"), as.character(main_annotation), "Other"))
+gol_spata2_2@meta_obs$annotation <- factor(gol_spata2_2@meta_obs$annotation, levels = c("Ducts", "PanIN/GLTumor", "Other"))
+gol_duct_panin_2 <- plotSurface(gol_spata2_2, color_by = 'annotation', display_image = F, pt_size = 0.3,
+                                clrp_adjust = c(cols, "Other" = 'lightgrey'), pt_alpha = 1) +  thin_margin
+ggsave("gol_duct_panin_2.pdf", gol_duct_panin_2 + NoLegend(), width = 3, height = 3, units = 'in', dpi = 1200)
+
+tumor_panin_pdtumor_legend <- get_legend(tumor_panin_pdtumor + theme(legend.position = 'top'))
+ggsave("tumor_panin_pdtumor_legend.pdf", tumor_panin_pdtumor_legend, width = 6, height = 2, units = 'in', dpi = 1200)
+
+# MUC5AC MUC5B GoL --------------------------------------------------------
+
+gol_spata2_muc5b_muc5ac <- plotSurfaceComparison(gol_spata2, color_by = c("MUC5AC","MUC5B"), display_image = T, pt_size = 0.5, pt_alpha = 0.7) +  thin_margin
+gol_spata2_muc5b_muc5ac_2 <- plotSurfaceComparison(gol_spata2_2, color_by = c("MUC5AC","MUC5B"), display_image = T, pt_size = 0.5, pt_alpha = 0.7) +  thin_margin
+combined_gol_spata2_muc5b_muc5ac <- wrap_plots(list(gol_spata2_muc5b_muc5ac + NoLegend(), gol_spata2_muc5b_muc5ac_2 + NoLegend()), nrow = 2) &
+  theme(plot.margin = margin(0, 0, 0, 0))
+ggsave("combined_gol_spata2_muc5b_muc5ac.pdf", combined_gol_spata2_muc5b_muc5ac + NoLegend(), width = 5, height = 5, units = 'in', dpi = 1200)
+
+gol_spata2_muc5b_muc5ac_legend <- get_legend(gol_spata2_muc5b_muc5ac)
+ggsave("combined_gol_spata2_muc5b_muc5ac_legend.pdf", gol_spata2_muc5b_muc5ac_legend , width = 2, height = 4, units = 'in', dpi = 1200)
+
+# PanIN_to_PDTumor UMAP ---------------------------------------------------------------------
+
+cols_subset <- c("Donor_PanIN" = "red3", "TumorAdj_PanIN" = "navy", "Tumor_PanIN/GLTumor" = "#F29403", "PDTumor" = '#F781BF')
+spatial_epi_umap <- DimPlot(
+  epi, 
+  group.by = c("new_annotation"),
+  cols = cols_subset,
+  raster = F) +
+  NoAxes() +
+  NoLegend() +
+  ggtitle('Preneoplastic/Neoplastic Domains')
+ggsave("spatial_epi_umap.pdf", spatial_epi_umap, width = 5, height = 2.5, units = 'in', dpi = 1200)
+
+spatial_epi_umap_legend <- get_legend(DimPlot(
+  epi, 
+  group.by = c("new_annotation"),
+  cols = cols_subset,
+  raster = F)) 
+ggsave("spatial_epi_umap_legend.pdf", spatial_epi_umap_legend, width = 2.5, height = 2.5, units = 'in', dpi = 1200)
+
+# Pseudotime heatmap ------------------------------------------------------
+
+spatial_epi_pseudotime <- FeaturePlot(
+  epi, 
+  features = c("palantir_pseudotime"),
+  raster = F
+) +
+  scale_color_viridis(option = 'C') +
+  NoAxes() +
+  NoLegend() +
+  ggtitle("Pseudotime")
+ggsave("spatial_epi_pseudotime.pdf", spatial_epi_pseudotime, width = 5, height = 2.5, units = 'in', dpi = 1200)
+
+spatial_epi_pseudotime_legend <- get_legend(FeaturePlot(
+  epi, 
+  features = c("palantir_pseudotime"),
+  raster = F
+) + scale_color_viridis(option = 'C'))
+ggsave("spatial_epi_pseudotime_legend.pdf", spatial_epi_pseudotime_legend, width = 1, height = 2.5, units = 'in', dpi = 1200)
+
+# Epi PCA -----------------------------------------------------------------
+
+epi_pca_plot <- PCAtools::biplot(epi_pca,
+                                 colby = 'new_annotation',
+                                 colkey = cols_subset,
+                                 lab = NULL,
+                                 encircle = T,
+                                 legendTitleSize = 0,
+                                 legendPosition = 'top',
+                                 title = NULL) +
+  ylim(c(-25,40)) + 
+  NoLegend()
+ggsave("epi_pca_plot.pdf", epi_pca_plot, width = 8, height = 5, units = 'in', dpi = 1200)
+
+# DotPlot Raw Expression --------------------------------------------------
+
+epi_markers_raw_exp <- FindAllMarkers(epi, group.by = 'new_annotation',assay = 'Spatial', only.pos = T)
+epi_markers_raw_exp$score <- epi_markers_raw_exp$avg_log2FC * epi_markers_raw_exp$pct.1
+
+top_markers <- epi_markers_raw_exp %>%
+  group_by(cluster) %>%
+  top_n(20, wt = score) %>%
+  pull(gene)
+
+epi_dotplot_raw_exp <- DotPlot2(epi, features = unique(top_markers), group.by = 'new_annotation', color_scheme = 'RdYlBu-rev', flip = T)
+ggsave("epi_dotplot_raw_exp.pdf", epi_dotplot_raw_exp, width = 15, height = 3, units = 'in', dpi = 1200)
+
+epi_dotplot_raw_exp_selected_genes <- VlnPlot2(epi, features = c("AMY2A", "PRSS1", "COL1A1", "FN1"), group.by = 'new_annotation', box = F, pt = F, cols = cols_subset, ncol = 1)
+ggsave("epi_dotplot_raw_exp_selected_genes.pdf", epi_dotplot_raw_exp_selected_genes, width = 4, height = 8, units = 'in', dpi = 1200)
+
+epi_dotplot_raw_exp <- DotPlot(epi, features = c("CELA3A", "SPINK1", "PRSS1", "COL1A1", "COL1A2", "FN1"), group.by = 'new_annotation', scale = F) +
+  scale_color_viridis(option = 'C') +
+  xlab(NULL) + ylab(NULL) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()
+ggsave("epi_dotplot_raw_exp_selected_genes.pdf", epi_dotplot_raw_exp + NoLegend(), width = 3, height = 4, units = 'in', dpi = 1200)
+
+ggsave("epi_dotplot_raw_exp_selected_genes_legend.pdf", get_legend(epi_dotplot_raw_exp), width = 4, height = 8, units = 'in', dpi = 1200)
+
+# TumorPanIN_v_GoLPanIN_VP ------------------------------------------------
+
+genes_to_highlight <- c("GKN1", "GKN2", "IL33", "NKX6-2", "MUC5AC", "TFF1",
+                        "KLK6", "KLK7","KLK8", "LY6E", "SLC2A1", "CD55", "PADI1")
+
+TumorPanIN_vs_GoLPanIN_DE <- TumorPanIN_vs_GoLPanIN_DE %>%
+  mutate(
+    sig = case_when(
+      padj < 0.05 & log2FoldChange >=  0.5 ~ "Up",
+      padj < 0.05 & log2FoldChange <= -0.5 ~ "Down",
+      TRUE ~ "NS"
+    ),
+    highlight = ifelse(gene %in% genes_to_highlight, TRUE, FALSE)
+  )
+
+TumorPanIN_vs_GoLPanIN_VP <- ggplot(TumorPanIN_vs_GoLPanIN_DE, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(aes(color = sig, size = sqrt(baseMean), alpha = sqrt(baseMean))) +
+  geom_text_repel(
+    data = subset(TumorPanIN_vs_GoLPanIN_DE, highlight),
+    aes(label = gene),
+    color = "black",
+    max.overlaps = Inf,
+    size = 5,
+    box.padding = 1, 
+  ) +
+  geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  scale_color_manual(values = c(Down = "dodgerblue3", Up = "firebrick", NS = "grey70")) +
+  scale_size_continuous(range = c(0.5, 5)) +
+  scale_alpha_continuous(range = c(0.3, 0.9), guide = "none") +
+  labs(
+    x = "log2 Fold Change",
+    y = "-log10(p-adjusted)",
+    color = "",
+    title = NULL
+  ) +
+  ylim(c(0,70)) +
+  theme_bw(base_size = 10) +
+  NoLegend() + 
+  ggbreak::scale_y_break(c(15,68), space = 0)
+
+ggsave("TumorPanIN_vs_GoLPanIN_VP.pdf", TumorPanIN_vs_GoLPanIN_VP, width = 10, height = 5, units = 'in', dpi = 1200)
+
+# PDtumor_v_TumorPanIN_VP ------------------------------------------------
+
+genes_to_highlight <- c("KRT6A", "CST6", "KRT17", "WNT7A", "LAMC2","TGM2",
+                        "KCNE3", "REG4", "PPP1R1B","AGR2", "OLFM4")
+
+PDTumor_vs_TumorPanIN_DE <- PDTumor_vs_TumorPanIN_DE %>%
+  mutate(
+    sig = case_when(
+      padj < 0.05 & log2FoldChange >=  0.5 ~ "Up",
+      padj < 0.05 & log2FoldChange <= -0.5 ~ "Down",
+      TRUE ~ "NS"
+    ),
+    highlight = ifelse(gene %in% genes_to_highlight, TRUE, FALSE)
+  )
+
+PDTumor_vs_TumorPanIN_VP <- ggplot(PDTumor_vs_TumorPanIN_DE, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(aes(color = sig, size = sqrt(baseMean), alpha = sqrt(baseMean))) +
+  geom_text_repel(
+    data = subset(PDTumor_vs_TumorPanIN_DE, highlight),
+    aes(label = gene),
+    color = "black",
+    max.overlaps = Inf,
+    size = 5,
+    box.padding = 1, 
+  ) +
+  geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  scale_color_manual(values = c(Down = "dodgerblue3", Up = "firebrick", NS = "grey70")) +
+  scale_size_continuous(range = c(0.5, 5)) +
+  scale_alpha_continuous(range = c(0.3, 0.9), guide = "none") +
+  labs(
+    x = "log2 Fold Change",
+    y = "-log10(p-adjusted)",
+    color = "",
+    title = NULL
+  ) +
+  ylim(c(0,60)) +
+  theme_bw(base_size = 10) +
+  NoLegend() +
+  ggbreak::scale_y_break(c(40,50), space = 0)
+
+ggsave("PDTumor_vs_TumorPanIN_VP.pdf", PDTumor_vs_TumorPanIN_VP, width = 10, height = 5, units = 'in', dpi = 1200)
+
+# TumorPanINvGoLPanIN_GSEA_RidgePlot ------------------------------------------------
+
+pathways <- c("INTERFERON_ALPHA_RESPONSE", "INTERFERON_GAMMA_RESPONSE", "INFLAMMATORY_RESPONSE", "TNFA_SIGNALING_VIA_NFKB", "EPITHELIAL_MESENCHYMAL_TRANSITION", "HYPOXIA", "KRAS_SIGNALING_UP",
+              "OXIDATIVE_PHOSPHORYLATION", "FATTY_ACID_METABOLISM", "ADIPOGENESIS", "BILE_ACID_METABOLISM")
+TumorPanINvGoLPanIN_ridgeplot <- ridgeplot(TumorPanIN_vs_GoLPanIN_GSEA, showCategory = pathways, decreasing = F) + 
+  theme(axis.text.y = element_text(size = 8),
+        axis.text.x = element_text(size = 6),
+        legend.title = element_text(size = 6),
+        legend.text = element_text(size = 6))
+ggsave("TumorPanINvGoLPanIN_ridgeplot.pdf", TumorPanINvGoLPanIN_ridgeplot, width = 7, height = 3, units = 'in', dpi = 1200)
+
+plot_df <- TumorPanIN_vs_GoLPanIN_GSEA %>% 
+  data.frame() %>%
+  select(ID, NES, p.adjust) %>%
+  filter(ID %in% pathways)
+TumorPanINvGoLPanIN_barplot <- ggplot(plot_df, aes(x = reorder(ID, NES), y = NES, fill = p.adjust)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_gradient(low = "red", high = "blue", name = "p-adj") +
+  theme_minimal() +
+  labs(x = NULL, y = "Normalized Enrichment Score (NES)") +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_text(size = 10)
+  )
+ggsave("TumorPanINvGoLPanIN_barplot.pdf", TumorPanINvGoLPanIN_barplot, width = 7, height = 3, units = 'in', dpi = 1200)
+
+
+# PDtumor_v_TumorPanIN_GSEA_RidgePlot ------------------------------------------------
+
+pathways <- c("INTERFERON_ALPHA_RESPONSE", "INTERFERON_GAMMA_RESPONSE", "INFLAMMATORY_RESPONSE", "TNFA_SIGNALING_VIA_NFKB", "EPITHELIAL_MESENCHYMAL_TRANSITION","KRAS_SIGNALING_UP",
+              "IL6_JAK_STAT3_SIGNALING",
+              "OXIDATIVE_PHOSPHORYLATION", "FATTY_ACID_METABOLISM", "E2F_TARGETS", "G2M_CHECKPOINT")
+
+PDTumorvTumorPanIN_ridgeplot <- ridgeplot(PDTumor_vs_TumorPanIN_GSEA, showCategory = pathways, decreasing = F) + 
+  theme(axis.text.y = element_text(size = 8),
+        axis.text.x = element_text(size = 6),
+        legend.title = element_text(size = 6),
+        legend.text = element_text(size = 6))
+ggsave("PDTumorvTumorPanIN_ridgeplot.pdf", PDTumorvTumorPanIN_ridgeplot, width = 7, height = 3, units = 'in', dpi = 1200)
+
+plot_df <- PDTumor_vs_TumorPanIN_GSEA %>% 
+  data.frame() %>%
+  select(ID, NES, p.adjust) %>%
+  filter(ID %in% pathways)
+PDTumor_vs_TumorPanIN_barplot <- ggplot(plot_df, aes(x = reorder(ID, NES), y = NES, fill = p.adjust)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_gradient(low = "red", high = "blue", name = "p-adj") +
+  theme_minimal() +
+  labs(x = NULL, y = "Normalized Enrichment Score (NES)") +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_text(size = 10)
+  )
+ggsave("PDTumor_vs_TumorPanIN_barplot.pdf", PDTumor_vs_TumorPanIN_barplot, width = 7, height = 3, units = 'in', dpi = 1200)
+
+
+# Plot Leading Edge -------------------------------------------------------
+
+epi_aggregate_subset <- subset(epi_aggregate, subset = new_annotation != 'TumorAdj_PanIN')
+epi_aggregate_subset@assays$epiexp@data <- rlog(as.matrix(epi_aggregate_subset@assays$epiexp@counts))
+epi_aggregate_subset <- ScaleData(epi_aggregate_subset)
+
+pathway <- "MYC_TARGETS_V2"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+
+pathway <- "OXIDATIVE_PHOSPHORYLATION"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+        lab_fill = 'zscore',
+        facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "FATTY_ACID_METABOLISM"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "BILE_ACID_METABOLISM"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "E2F_TARGETS"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "G2M_CHECKPOINT"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "INTERFERON_ALPHA_RESPONSE"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "EPITHELIAL_MESENCHYMAL_TRANSITION"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "TNFA_SIGNALING_VIA_NFKB"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "HYPOXIA"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "KRAS_SIGNALING_UP"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+
+pathway <- "IL6_JAK_STAT3_SIGNALING"
+leading_edge1 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge2 <- TumorPanIN_vs_GoLPanIN_GSEA@result %>% 
+  filter(ID == pathway) %>%
+  pull(core_enrichment) %>%
+  strsplit("/") %>% 
+  unlist()
+leading_edge <- unique(leading_edge1, leading_edge2)
+toplot <- CalcStats(epi_aggregate_subset, assay = 'epiexp', features = leading_edge)
+plot <- Heatmap(toplot,
+                lab_fill = 'zscore',
+                facet_col = epi_aggregate_subset$new_annotation) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 10, face = 'bold')) +
+  ggtitle(pathway)
+ggsave(filename = paste0("", pathway, "_leading_edge_epi_gsea.pdf"), plot, width = 7, height = 10, dpi = 300)
+```

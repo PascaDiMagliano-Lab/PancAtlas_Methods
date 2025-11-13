@@ -1,0 +1,123 @@
+---
+title: "scRNAseq Fibroblast Subpopulation Analysis"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+This section focuses on a detailed sub-analysis of the fibroblast population. We subset the fibroblast cells from the main dataset, reclustered them to identify distinct fibroblast subtypes.
+
+## 1 Setup and Environment Configuration
+
+```{r}
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SeuratWrappers)
+  library(tidyverse)
+  library(scCustomize)
+  library(CellChat)
+  library(slurmR)
+  library(tidyverse)
+  library(reticulate)
+  library(qs)
+  library(clustree)
+  library(org.Hs.eg.db)
+  library(CoGAPS)
+  library(Seurat)
+  library(slurmR)
+  library(cowplot)
+  library(tidyverse)
+  library(pheatmap)
+  library(qs)
+})
+
+ref <- qread("../outputs/scRNAseq_Analysis/scRef.qs")
+```
+
+## 2 Subset and Re-cluster Fibroblasts
+
+```{r fibro_setup_recluster}
+fibro <- subset(ref, subset = main_annotation_scvi == 'Fibroblasts')
+samples_keep <- names(table(fibro$sample_id))[table(fibro$sample_id) > 10]
+fibro$sample_id <- factor(as.character(fibro$sample_id))
+fibro <- subset(fibro, subset = sample_id %in% samples_keep)
+fibro <- RunUMAP(fibro, reduction = 'integrated.scvi', dims = 1:30)
+fibro <- FindNeighbors(fibro, reduction = 'integrated.scvi', dims = 1:30)
+res <- seq(from = 0.05, to = 1, by = 0.05)
+for (x in res) {
+  fibro <- FindClusters(fibro, resolution = x, cluster.name = paste0("res.", x))
+}
+clustree(fibro, prefix = 'res.', layout = "sugiyama")
+fibro <- FindClusters(fibro, resolution = 0.2)
+fibro <- JoinLayers(fibro)
+```
+
+## 3 Annotate Fibroblast Subtypes
+
+```{r} 
+markers <- FindAllMarkers(fibro)
+markers$scores <- markers$avg_log2FC * markers$pct.1
+fibro <- subset(fibro, subset = seurat_clusters %in% c(0, 2, 3, 4, 5, 6, 7))
+fibro <- RunUMAP(fibro, reduction = 'integrated.scvi', dims = 1:30)
+new_idents <- c(
+  '0' = 'IGF1+_Fibro',
+  '2' = 'SFRP4+_Fibro',
+  '3' = 'LRRC15+_Fibro',
+  '4' = 'RORA+_Fibro',
+  '5' = 'HAS1+_Fibro',
+  '6' = 'COL1A1+_Fibro',
+  '7' = 'CD74+_Fibro'
+)
+fibro <- RenameIdents(fibro, new_idents)
+fibro$fibro_subtypes <- Idents(fibro)
+fibro$fibro_subtypes <- factor(
+  fibro$fibro_subtypes,
+  levels = c(
+    'IGF1+_Fibro',
+    'HAS1+_Fibro',
+    'COL1A1+_Fibro',
+    'LRRC15+_Fibro',
+    'SFRP4+_Fibro',
+    'RORA+_Fibro',
+    'CD74+_Fibro'
+  )
+)
+qsave(fibro, "../outputs/scRNAseq_Analysis/scRef_fibro.qs")
+```
+
+```{r}
+#| include : false
+#| eval: false
+ref <- qread("../outputs/scRNAseq_Analysis/scRef_fibro.qs")
+```
+
+```{r}
+#| eval: false
+cols <- scPalette(length(unique(fibro$fibro_subtypes)))
+names(cols) <- levels(fibro$fibro_subtypes)
+DimPlot(fibro, group.by = 'fibro_subtypes', cols = cols) +
+  ggtitle("scRNAseq Fibroblasts Subtypes")
+
+markers <- FindAllMarkers(fibro, group.by = 'fibro_subtypes')
+markers$scores <- markers$avg_log2FC * markers$pct.1
+top_markers <- markers %>%
+  group_by(cluster) %>%
+  top_n(n = 30, wt = scores) %>%
+  dplyr::select(cluster, gene) %>%
+  split(.$cluster) %>%
+  lapply(pull, gene)
+```
+
+
+```{r}
+#| eval: false
+sessionInfo()
+```

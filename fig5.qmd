@@ -1,0 +1,399 @@
+---
+title: "Figure 5"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+```{r}
+# Setup ----
+
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SeuratExtend)
+  library(CellChat)
+  library(BayesPrism)
+  library(tidyverse)
+  library(EnhancedVolcano)
+  library(qs)
+  library(SPATA2)
+  library(patchwork)
+  library(pheatmap)
+  library(numbat)
+  library(tidytext)
+})
+
+# Improting data ----
+
+dir.create("final_figures2", showWarnings = F, recursive = T)
+
+spatial <- qread("../outputs/Spatial_Clustering/spatial.qs")
+cols <- scPalette(length(levels(spatial$main_annotation)))
+names(cols) <- levels(spatial$main_annotation)
+gol_Nhood_Dist <- qread("../outputs/Misc/GoL_Nhood_Dist.qs")
+average_gol_nhood_dist <- qread("../outputs/Misc/average_gol_nhood_dist.qs")
+tumor_Nhood_Dist <- qread("../outputs/Misc/Tumor_Nhood_Dist.qs")
+average_tumor_nhood_dist <- qread("../outputs/Misc/average_tumor_nhood_dist.qs")
+
+fibro <- qread("../outputs/scRNAseq_Analysis/fibro_all.qs")
+spatial_fibro <- qread("../outputs/Fibroblasts_Analysis/spatial_stroma.qs")
+spatial_fibro_aggregate <- qread("../outputs/Fibroblasts_Analysis/fibroblast_subtypes_deconvolution_F2F3.qs")
+spatial_fibro_pca <- qread("../outputs/Fibroblasts_Analysis/fibro_aggregate_pca.qs")
+
+macs <- qread("../outputs/scRNAseq_Analysis/macs_all.qs")
+spatial_macs_aggregate <- qread("../outputs/Macs_Analysis/macs_subtypes_deconvolution.qs")
+tcga_gsva_scores <- qread("../outputs/Misc/tcga_gsva_score.qs")
+
+tumor_spata2 <- qread("../outputs/Misc/tumor_sample_spata2_object.qs")
+tumor_spata2_2 <- qread("../outputs/Misc/SU-21-54126_D2_tumor_sample_spata2_object.qs")
+gol_spata2 <- qread("../outputs/Misc/AKJD206_C1_gol_sample_spata2_object.qs")
+gol_spata2_2 <- qread("../outputs/Misc/AJJB111_B1_gol_sample_spata2_object.qs")
+
+thin_margin <- theme(plot.margin = unit(c(0, 0, 0, 0), "in"))
+
+# % Fibro / Total Fibro Histogram -----------------------------------------
+
+plot_data <- spatial@meta.data %>%
+  filter(main_annotation %in% c("Fibro1", "Fibro2", "Fibro3", "Fibro4(Hi_Mt)")) %>%
+  select(tissue, main_annotation) %>%
+  mutate(main_annotation = as.character(main_annotation)) %>%
+  table() %>%
+  prop.table(margin = 1) %>%
+  data.frame() 
+
+percent_fibroblast_histogram <- ggplot(plot_data, aes(x = tissue, y = Freq * 100, fill = main_annotation)) +
+  geom_bar(stat = 'identity') +
+  scale_fill_manual(values = cols) +
+  xlab(NULL) + ylab("% of Total Fibroblast-Enriched Spatial Domains") +
+  theme_bw() +
+  theme(panel.border = element_rect(colour = 'black', linewidth = 1, fill = NA),
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(expand = c(0,0)) + scale_y_continuous(expand = c(0,0))
+ggsave("percent_fibroblast_histogram.pdf", percent_fibroblast_histogram, width = 4, height = 5, units = 'in', dpi = 1200)
+
+# Nhood Wilcox Test -------------------------------------------------------
+
+gol_Nhood_Dist$tissue <- "Healthy"
+tumor_Nhood_Dist$tissue <- "PDAC"
+nhood_df <- rbind(gol_Nhood_Dist, tumor_Nhood_Dist)
+nhood_df$tissue_domain <- paste0(nhood_df$tissue, "_", nhood_df$domain)
+nhood_df$tissue_domain <- gsub("_nbors", "", nhood_df$tissue_domain)
+nhood_df <- nhood_df[!(nhood_df$sample_id == 'AJJB111_B1' & nhood_df$domain == 'PanIN_nbors'),]
+nhood_df$tissue_domain <- gsub("PDAC_PanIN", "PanIN/GLTumor", nhood_df$tissue_domain)
+nhood_df$tissue_domain <- gsub("PDAC_PDTumor", "PDTumor", nhood_df$tissue_domain)
+nhood_df$tissue_domain <- factor(nhood_df$tissue_domain, levels = c("Healthy_Ducts", "Healthy_PanIN",
+                                                                    "PDAC_Ducts", "PanIN/GLTumor", "PDTumor"))
+comparisons <- combn(unique(as.character(nhood_df$tissue_domain)), 2, simplify = F)
+
+fibro2 <- nhood_df %>% filter(nhood == 'Fibro2')
+fibro2_boxplot <- ggboxplot(fibro2, x = 'tissue_domain', y = 'fraction', fill = 'domain', outlier.shape = NA) +
+  stat_compare_means(method = 'wilcox.test', comparisons = comparisons[c(2,3,5,6,8,9,10)], hide.ns = T) +
+  theme_bw(base_size = 10) +
+  # theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  NoLegend() +
+  xlab(NULL) +
+  ylab("Fibro2 Fraction in 150\u00B5 Neighborhood") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  scale_fill_manual(values = c("Ducts_nbors" = "#984EA3", "PanIN_nbors" = "#F29403", "PDTumor_nbors" = "#F781BF"))
+ggsave("Nhood_fibro2BoxPlot.pdf", fibro2_boxplot, width = 3, height = 5, units = 'in', dpi = 1200)
+
+fibro3 <- nhood_df %>% filter(nhood == 'Fibro3')
+fibro3_boxplot <- ggboxplot(fibro3, x = 'tissue_domain', y = 'fraction', fill = 'domain', outlier.shape = NA) +
+  stat_compare_means(method = 'wilcox.test', comparisons = comparisons[c(2,4,9)], hide.ns = T) +
+  theme_bw(base_size = 10) +
+  # theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  NoLegend() +
+  xlab(NULL) +
+  ylab("Fibro3 Fraction in 150\u00B5 Neighborhood") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  scale_fill_manual(values = c("Ducts_nbors" = "#984EA3", "PanIN_nbors" = "#F29403", "PDTumor_nbors" = "#F781BF"))
+ggsave("Nhood_fibro3BoxPlot.pdf", fibro3_boxplot, width = 3, height = 5, units = 'in', dpi = 1200)
+
+# Spatial DimPlot Fibro2 Fibro3 -------------------------------------------
+
+tumor_spata2@meta_obs <- mutate(tumor_spata2@meta_obs, annotation = ifelse(main_annotation %in% c("Ducts", "PDTumor", "PanIN/GLTumor", "Fibro1", "Fibro2", "Fibro3", "Fibro4(Hi_Mt)"), as.character(main_annotation), "Other"))
+tumor_spata2@meta_obs$annotation <- factor(tumor_spata2@meta_obs$annotation, levels = c("Ducts", "PDTumor", "PanIN/GLTumor", "Fibro1", "Fibro2", "Fibro3", "Fibro4(Hi_Mt)", "Other"))
+tumor_fibro <- plotSurface(tumor_spata2, color_by = 'annotation', display_image = F, pt_size = 0.3,
+                            clrp_adjust = c(cols, "Other" = 'lightgrey')) +
+  thin_margin
+
+gol_spata2@meta_obs <- mutate(gol_spata2@meta_obs, annotation = ifelse(main_annotation %in% c("Ducts", "PDTumor", "PanIN/GLTumor", "Fibro1", "Fibro2", "Fibro3", "Fibro4(Hi_Mt)"), as.character(main_annotation), "Other"))
+gol_spata2@meta_obs$annotation <- factor(gol_spata2@meta_obs$annotation, levels = c("Ducts", "PDTumor", "PanIN/GLTumor", "Fibro1", "Fibro2", "Fibro3", "Fibro4(Hi_Mt)", "Other"))
+gol_fibro <- plotSurface(gol_spata2, color_by = 'annotation', display_image = F, pt_size = 0.3,
+                          clrp_adjust = c(cols, "Other" = 'lightgrey')) +
+  thin_margin
+
+legend <- get_legend(tumor_fibro)
+fibro_dimplot <- wrap_plots(gol_fibro + NoLegend(), tumor_fibro + NoLegend())  &
+  theme(plot.margin = margin(0, 0, 0, 0))
+
+ggsave("fibro_dimplot.pdf", fibro_dimplot, width = 5, height = 2.5, units = 'in', dpi = 600)
+ggsave("fibro_dimplot_legend.pdf", legend, width = 2, height = 2.5, units = 'in', dpi = 600)
+
+# Spatial DimPlot  ----------------------------------------------------------------
+spatial_fibro$tissue <- factor(spatial_fibro$tissue, levels = c("GoL", "TumorAdj", "Tumor"))
+spatial_fibro_dmplot <- DimPlot2(
+  spatial_fibro,
+  group.by = c("main_annotation"),
+  cols = cols,
+  raster = F,
+  shape.by = 'tissue',
+  pt.size = 3,
+  theme =  theme_umap_arrows()
+) +
+  scale_shape_manual(values = c(16,1,4))
+spatial_fibro_dmplot <- DimPlot(spatial_fibro, group.by = 'main_annotation', cols = cols, alpha = c(0.6), )
+ggsave("final_figures/Fig4E.pdf", spatial_fibro_dmplot, width = 10, height = 8, units = 'in', dpi = 1200)
+
+# PCA -------------------------------------------------------------------
+fibro_pca$metadata$tissue <- factor(fibro_pca$metadata$tissue, levels = c("GoL", "TumorAdj", "Tumor"))
+fibro_pca_plot <- PCAtools::biplot(fibro_pca,
+                                   colby = 'main_annotation',
+                                   colkey = c('Fibro2' = "#A65628", 'Fibro3' = "#54B0E4"),
+                                   lab = NULL,
+                                   shape = 'tissue',
+                                   encircle = F,
+                                   legendTitleSize = 12,
+                                   shapekey = c(16,1,4),
+                                   pointSize = 5,
+                                   legendPosition = 'right')
+ggsave("final_figures/Fig4F.pdf", fibro_pca_plot, width = 7, height = 5, units = 'in', dpi = 1200)
+
+# Fibro2 vs Fibro3 VP ------------------------------------------------
+
+genes_to_highlight <- c("COL11A1", "COL10A1", "FN1", "MMP11","POSTN", "SULF1",
+                        "CTHRC1", "IGFL2", "IGFBP3", "LEF1",
+                        "GPX3", "C7", "EDNRB", "ADH1B", "CCL19", "STEAP4", "PTGDS", "MFAP4")
+
+fibro2_v_fibro3_DEGs <- fibro2_v_fibro3_DEGs %>%
+  mutate(
+    sig = case_when(
+      padj < 0.05 & log2FoldChange >=  0.5 ~ "Up",
+      padj < 0.05 & log2FoldChange <= -0.5 ~ "Down",
+      TRUE ~ "NS"
+    ),
+    highlight = ifelse(gene %in% genes_to_highlight, TRUE, FALSE)
+  )
+
+fibro2_v_fibro3_VP <- ggplot(fibro2_v_fibro3_DEGs, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(aes(color = sig, size = sqrt(baseMean), alpha = sqrt(baseMean))) +
+  geom_text_repel(
+    data = subset(fibro2_v_fibro3_DEGs, highlight),
+    aes(label = gene),
+    color = "black",
+    max.overlaps = Inf,
+    size = 5,
+    box.padding = 1,
+  ) +
+  geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  scale_color_manual(values = c(Down = "dodgerblue3", Up = "firebrick", NS = "grey70")) +
+  scale_size_continuous(range = c(0.5, 5)) +
+  scale_alpha_continuous(range = c(0.3, 0.9), guide = "none") +
+  labs(
+    x = "log2 Fold Change",
+    y = "-log10(p-adjusted)",
+    color = "",
+    title = "Fibro2 vs. Fibro3 DEGs"
+  ) +
+  theme_bw()
+
+ggsave("final_figures/fibro2_v_fibro3_VP.pdf", fibro2_v_fibro3_VP, width = 7, height = 5, units = 'in', dpi = 1200)
+
+
+# scRNAseq dimplot --------------------------------------------------------
+
+scRNAseq_FibroDimPlot <- DimPlot2(fibro, group.by = 'fibro_subtypes', cols = 'iwh_all', pt.size = 0.5, theme = list(theme_umap_arrows(), NoLegend()))
+ggsave("scRNAseq_FibroDimPlot.pdf", scRNAseq_FibroDimPlot, width = 3, height = 3, units = 'in', dpi = 1200)
+
+scRNAseq_fibrohistogram <- ClusterDistrBar(origin = fibro$tissue, cluster = fibro$fibro_subtypes, cols = 'iwh_all', flip = F, reverse_order = F) +
+  xlab(NULL) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("scRNAseq_fibrohistogram.pdf", scRNAseq_fibrohistogram, width = 3, height = 3, units = 'in', dpi = 1200)
+
+features_of_interest <- c("PDGFRA", "IGF1", "EDNRB", "C7",
+                          "IL6", "PI16", "HAS1",
+                          "SFRP4", "DPEP1", "ENG",
+                          "LRRC15" , "MMP11", "ACTA2", "LEF1",
+                          "COL1A1", "COL1A2",
+                          "RORA", "KAZN", "PVT1",
+                          "CD74", "HLA-DRA")
+fibro_dotplot <- DotPlot2(fibro, features = features_of_interest, group.by = 'fibro_subtypes', color_scheme = 'RdYlBu-rev', flip = T, show_grid = T, legend_position = 'bottom')
+ggsave("scRNAseq_FibroDotPlot.pdf", fibro_dotplot, width = 8, height = 4, units = 'in', dpi = 1200)
+
+# H-Deconv ----
+
+avg <- AverageExpression(fibro_aggregate, assays = 'subtype_fractions', group.by = 'main_annotation')$subtype_fractions
+avg <- avg[c(4,7,1,3),c(2,1)]
+fibro_h_deconv_heatmap <- pheatmap(t(avg),
+                                   cluster_cols = F,
+                                   cluster_rows = F,
+                                   color = viridis(n = 1000, option = 'B'),
+                                   border_color = 'white',
+                                   main = 'Hierarchical deconvolution of fibroblasts in different niches')
+ggsave("fibro_h_deconv_heatmap.pdf", fibro_h_deconv_heatmap, width = 5, height = 3, units = 'in', dpi = 1200)
+
+fraction_vlnplot <- VlnPlot2(fibro_aggregate, features = c("IGF1+-Fibro", "HAS1+-Fibro", "SFRP4+-Fibro", "LRRC15+-Fibro"), group.by = 'main_annotation', violin = F, nrow = 2, stat.method = 'wilcox.test', label = 'p.adj') +
+  scale_fill_manual(values = c('Fibro2' = "#A65628", 'Fibro3' = "#54B0E4")) +
+  ylab("Fraction")
+ggsave("fibro_h_fraction_boxplot.pdf", fraction_vlnplot, width = 4, height = 5, units = 'in', dpi = 1200)
+
+fibro_elbow_plot <- cowplot::plot_grid(plotlist = fibro_elbow, ncol = 1)
+ggsave("final_figures/Fig5Aa.pdf", fibro_elbow_plot, width = 5, height = 6, units = 'in', dpi = 1200)
+
+patterns_featureplot_list <- lapply(colnames(fibro_cogaps@sampleFactors), function(x){
+  FeaturePlot(sc_fibro, features = x, pt.size = 0.5) +
+    scale_color_viridis(option = 'B') +
+    theme(
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank()
+    ) +
+    NoLegend()
+})
+patterns_featureplot_list <- wrap_plots(patterns_featureplot_list, nrow = 2)
+ggsave("final_figures/Fig5Bb.pdf", patterns_featureplot_list, width = 15, height = 6, units = 'in', dpi = 300)
+
+legend <- get_legend(FeaturePlot(sc_fibro, features = colnames(fibro_cogaps@sampleFactors)[1], pt.size = 0.5) + scale_color_viridis(option = 'B'))
+ggsave("final_figures/Fig5BLegend.pdf", legend, width = 2, height = 5, units = 'in', dpi = 300)
+
+top_markers <- fibro_cogaps_markers$PatternMarkerScores %>%
+  reshape2::melt(varnames = c('gene', "pattern"), value.name = 'score') %>%
+  filter(pattern %in% paste0("Pattern_",c(1,6,7,8,9,11))) %>%
+  group_by(pattern) %>%
+  top_n(n = 10, wt = score) %>%
+  pull(gene) %>% unique()
+
+top_custom_markers <- c("SFRP4", "CAPDS", "CST2", "AGT", "COMP","THSD4", "ANO1", "WNT4", "LAMP5", "PIEZO2", "DPEP1",
+                        "PTPRC", "FYB1", "SKAP1", "CD52", "S100A9", "SAMSN1", "HLA-DRA",
+                        "MFAP5", "KLF4", "CXCL2", "GPRC5A", "IL6", "HAS1", "IL18", "PI16",
+                        "COL11A1", "MMP11", "GJB2", "SDC1", "IGFL2", "POSTN", "LRRC15", "TMEM158",
+                        "LMO3")
+
+colors <- rev(RColorBrewer::brewer.pal(n = 11, name = "RdYlBu"))
+colors.use <- grDevices::colorRampPalette(colors = colors)(100)
+
+markers_hetamap <- pheatmap(fibro_cogaps_markers$PatternMarkerScores[top_markers,paste0("Pattern_",c(1,6,7,8,9,11))],
+                            color = colors.use,
+                            border_color = "white",
+                            cellwidth = 20,
+                            cellheight = 8,
+                            fontsize_row = 7,
+                            angle_col = 45,
+                            cluster_rows = F,
+                            cluster_cols = F)
+ggsave("final_figures/Fig5Cc.pdf", markers_hetamap, width = 4, height = 10, units = 'in', dpi = 300)
+
+pheatmap::pheatmap(mat = t(top_acts_mat),
+                   color = colors.use,
+                   border_color = "white",
+                   breaks = my_breaks,
+                   # cellwidth = 15,
+                   # cellheight = 15,
+                   treeheight_row = 20,
+                   treeheight_col = 20)
+
+sc_fibro$fibro_subtypes <- factor(sc_fibro$fibro_subtypes, levels = c("IGF1+_Fibro", "HAS1+_Fibro", "SFRP4+_Fibro", "LRRC15+_Fibro", "COL1A1+_Fibro", "RORA+_Fibro", "CD74+_Fibro"))
+fibro_umap <- DimPlot2(
+  sc_fibro,
+  group.by = c("fibro_subtypes"),
+  cols = 'iwh_all',
+  raster = F,
+  pt.size = 0.5,
+  theme =  theme_umap_arrows()
+)
+ggsave("final_figures/Fig5A.pdf", fibro_umap, width = 6, height = 4, units = 'in', dpi = 1200)
+
+fibro_histogram_tissue <- ClusterDistrBar(sc_fibro$tissue, sc_fibro$fibro_subtypes,
+                                          cols = 'iwh_all',
+                                          flip = F,
+                                          border = 'white', reverse_order = F) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab(NULL) + labs(fill = "Fibroblast Subtypes")
+ggsave("final_figures/Fig5C.pdf", fibro_histogram_tissue,  width = 4, height = 4, dpi = 300)
+
+doublet_score <- VlnPlot2(
+  sc_fibro,
+  features = 'doublet_score',
+  cols = 'iwh_all',
+  group.by = 'fibro_subtypes',
+  pt = F,
+  box = F
+)
+ggsave("final_figures/SuppFig5A.pdf", doublet_score,  width = 4, height = 5, dpi = 300)
+
+plot_df <- GetAssayData(stroma_aggregate, assay = 'subtype_fractions')[c(4,7,1,3),]
+ann <- stroma_aggregate@meta.data %>% select(main_annotation_tissue)
+ann$main_annotation_tissue <- factor(ann$main_annotation_tissue, levels = c("Fibro3_GoL", "Fibro3_TumorAdj", "Fibro3_Tumor", "Fibro2_Tumor"))
+ann_cols <- list(main_annotation_tissue = c('Fibro3_GoL'))
+samples_heatmap <- pheatmap(plot_df[,order(ann$main_annotation_tissue)],
+                            cluster_rows = F, cluster_cols = F,
+                            annotation = ann,
+                            color = viridis(option = 'B',n = 100), show_colnames = F)
+ggsave("final_figures/SuppFig5B.pdf", samples_heatmap,  width = 10, height = 5, dpi = 300)
+
+# Macs DimPlot ------------------------------------------------------------
+
+macs$macs_subtypes <- factor(macs$macs_subtypes, levels = c("Classical_Macs", "Nonclassical_Macs", "Resident_Macs", "AltAct_Macs", "THBS1+_Macs", "Cycling_Macs", "Dendritic"))
+Idents(macs) <- macs$macs_subtypes
+macs_dimplot <- DimPlot2(macs, group.by = 'macs_subtypes', pt.size = 0.5, cols = 'iwh_default', theme = list(theme_umap_arrows(), theme(legend.position = 'top')))
+ggsave("scRNAseq_macs_dimplot.pdf", macs_dimplot,  width = 7, height = 5, dpi = 300)
+
+macs@misc$markers$cluster <- factor(macs@misc$markers$cluster, levels = c("Classical_Macs", "Nonclassical_Macs", "Resident_Macs", "AltAct_Macs", "THBS1+_Macs", "Cycling_Macs", "Dendritic"))
+macs_top_markers <-  macs@misc$markers %>%
+  group_by(cluster) %>%
+  top_n(n = 10, wt = scores) %>%
+  dplyr::select(gene, cluster) %>%
+  split(f = .$cluster) %>%
+  lapply(pull, gene)
+selected_markers <- c("S100A9", "S100A8", "FCN1", "FCGR3A", "CDKN1C", "FRMD4A", "C1QA", "C1QB", "SPP1", "FABP5", "APOE", "MARCO", "THBS1", "AREG", "EREG", "MKI67","TOP2A", "CCSER1", "CLNK", "HLA-DRA")
+macs_dotplot <- DotPlot2(macs, features = selected_markers, flip = T, color_scheme = 'RdYlBu-rev', legend_position = 'bottom')
+ggsave("scRNAseq_macs_dotplot.pdf", macs_dotplot,  width = 7, height = 4, dpi = 300)
+
+macs_tissue_histogram <- ClusterDistrBar(macs$tissue, macs$macs_subtypes, cols = 'iwh_default', flip = F, reverse_order = F) +
+  xlab(NULL) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("macs_tissue_histogram.pdf", macs_tissue_histogram,  width = 4, height = 5, dpi = 300)
+
+plot_df <- GetAssayData(spatial_macs_aggregate, assay = 'subtype_fractions') %>%
+  data.frame() %>%
+  rownames_to_column("mac_subtype") %>%
+  pivot_longer(cols = -mac_subtype, values_to = 'fraction')
+
+macs_cols <- color_iwh(n = length(levels(macs$macs_subtypes)), col.space = 'default')
+names(macs_cols) <- gsub("_", "-", levels(macs$macs_subtypes))
+macs_deconvolution_boxplot <- ggplot(plot_df, aes(x = reorder_within(x = mac_subtype, within = mac_subtype, by = fraction), y = fraction,  fill = mac_subtype)) +
+  geom_boxplot() +
+  geom_point() +
+  scale_x_reordered() +
+  xlab(NULL) + ylab("Celltype Fraction") +
+  theme_bw() +
+  scale_fill_manual(values = macs_cols) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("macs_deconvolution_boxplot.pdf", macs_deconvolution_boxplot + NoLegend(),  width = 3, height = 4, dpi = 300)
+
+macs_scores <- tcga_gsva_scores[,7:12]
+fibro_scores <- tcga_gsva_scores[,1:6]
+corr <- cor(fibro_scores, macs_scores, method = 'pearson')
+my_palette <- colorRampPalette(c("blue", "red"))(10)
+# breaks <- seq(-max(abs(corr)), max(abs(corr)), length.out = 101)
+fibro_macs_cor_heatmap <- pheatmap(corr, color = my_palette, border_color = 'white',angle_col = 45, display_numbers = T, fontsize_number = 15, number_color = 'white')
+ggsave("fibro_macs_cor_heatmap.pdf", fibro_macs_cor_heatmap,  width = 7, height = 7, dpi = 300)
+
+lrrc_altact_points <- ggplot(tcga_gsva_scores, aes(x = `LRRC15+_Fibro`, y = `AltAct_Macs`)) +
+  geom_point() +
+  xlab("LRRC15+ Fibro Score") + ylab("AltAct Fibro Score") +
+  theme_bw()
+ggsave("lrrc_altact_points.pdf", lrrc_altact_points,  width = 5, height = 5, dpi = 300)
+```

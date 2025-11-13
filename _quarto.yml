@@ -1,0 +1,77 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "Elhossiny et al, 2025 Code"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - text: "scRNAseq Analysis"          
+        menu:
+          - text: "Data Acquisition"
+            href: scRNAseq_data_acquisiton.qmd
+          - text: "Ambient RNA Correction"
+            href: scRNAseq_cellbender.qmd
+          - text: "Data Processing and Integration"
+            href: scRNAseq_processing.qmd
+          - text: "CNV Inference"
+            href: scRNAseq_numbat.qmd
+          - text: "Firoblast Subpopulation Analysis"
+            href: scRNAseq_fibro.qmd
+          - text: "Macrophages Subpopulation Analysis"
+            href: scRNAseq_macs.qmd
+          - text: "TCGA-PAAD Scoring"
+            href: scRNASeq_TCGA_Scoring.qmd
+      - text: "Visium Data Analysis"            
+        menu:
+          - text: "Data Acquisition"
+            href: st_data_acquisiton.qmd
+          - text: "Data Processing"
+            href: st_processing.qmd
+          - text: "Cell Type Deconvolution (RCTD)"
+            href: st_deconvolution.qmd
+          - text: "Spatially-aware Clustering (BayesSpace)"
+            href: st_clustering.qmd
+          - text: "Epithelial Domains Analysis"
+            href: st_epi_analysis.qmd.qmd
+          - text: "Neighborhood Analysis"
+            href: st_nhood_analysis.qmd
+          - text: "Stromal Domains Analysis"
+            href: st_stroma_analysis.qmd
+      - text: "Xenium Analysis"            
+        menu:
+          - text: "Resegmentation"
+            href: st_xenium_segmentation.qmd
+          - text: "Data Processing"
+            href: st_xenium_processing.qmd
+          - text: "Spatial Regression"
+            href: st_xenium_regression.qmd
+          - text: "Polygon Visualization"
+            href: st_xenium_viz.qmd
+      - text: "Paper Figures"            
+        menu:
+          - text: "Fig 2"
+            href: fig2.qmd
+          - text: "Fig 3"
+            href: fig3.qmd
+          - text: "Fig 4"
+            href: fig4.qmd
+          - text: "Fig 5"
+            href: fig5.qmd
+          - text: "Fig 6"
+            href: fig6.qmd
+          - text: "Fig 7"
+            href: fig7.qmd
+      - text: "Interactive Data Visualization"
+        href: https://pascadimaglianolab.shinyapps.io/PancAtlas/
+        target: _blank
+
+bibliography: references.bib
+
+format:
+  html:
+    toc: true
+    theme: cosmo
+    css: styles.css

@@ -1,0 +1,611 @@
+---
+title: "Spatial Transcriptomics Epithelial Domains Analysis"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we perform analysis of the epithelial domains (Acinar, Ducts, PanINs, GLTumor, PDTumor) in our spatial transcriptomics data. We can download the spatial and scRNAseq seurat objects from Zenodo [here]().
+
+## 1 Setup
+
+```{r}
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(BayesPrism)
+  library(tidyverse)
+  library(CellChat)
+  library(monocle3)
+  library(tradeSeq)
+  library(SeuratWrappers)
+  library(qs)
+  library(clustree)
+  library(anndata)
+  library(reticulate)
+  library(PCAtools)
+  library(reshape2)
+  library(fgsea)
+  library(msigdbr)
+  library(tidytext)
+  library(clusterProfiler)
+  library(biomaRt)
+  library(enrichplot)
+  library(org.Hs.eg.db)
+  library(ReactomePA)
+  library(ggvenn)
+  library(SeuratExtend)
+})
+
+scRef <- qread("../outputs/scRNAseq_Analysis/scRef.qs")
+spatial <- qread("../outputs/Spatial_Clustering/spatial.qs")
+samples_info <- readxl::read_xlsx("../data/visium_samples_manifest.xlsx")
+```
+
+## 2 Subsetting Epithelial domains
+
+We will remove the `PDTumor` domains from `Healthy` and `AdjNormal` samples because they had very few spots within each sample and they don't correspond to the known histological phenotypes. We also remove `PanIN/GLTumor` domains from `AJJB111_B1` sample for the same reason.
+
+```{r}
+all_epi <- subset(
+  spatial,
+  subset = main_annotation %in%
+    c('Acinar1', 'Acinar2', 'Acinar3', 'Ducts', 'PanIN/GLTumor', 'PDTumor')
+)
+all_epi <- all_epi[,
+  !(all_epi$main_annotation == "PDTumor" &
+    all_epi$tissue %in% c("Healthy", "AdjNormal"))
+]
+all_epi <- all_epi[,
+  !(all_epi$main_annotation == "PanIN/GLTumor" &
+    all_epi$sample_id == 'AJJB111_B1')
+]
+# samples_keep <- table(all_epi$sample_id, all_epi$main_annotation) %>%
+#   data.frame() %>%
+#   filter(Freq > 50)
+# all_epi$sample_main_annotation <- paste0(all_epi$sample_id, "_", all_epi$main_annotation)
+# all_epi <- subset(all_epi, subset = sample_main_annotation %in% paste0(samples_keep$Var1,"_", samples_keep$Var2))
+all_epi <- RunUMAP(all_epi, reduction = 'integrated.rpca', dims = 1:50)
+qsave(all_epi, "outputs/Epithelial_Analysis/all_epi_domains.qs")
+
+epi <- subset(
+  all_epi,
+  subset = main_annotation %in% c('PanIN/GLTumor', 'PDTumor')
+)
+epi$new_annotation <- paste0(epi$tissue, "_", epi$main_annotation)
+epi$new_annotation <- gsub("Tumor_PDTumor", "PDTumor", epi$new_annotation)
+epi$new_annotation <- gsub(
+  "GoL_PanIN/GLTumor",
+  "Donor_PanIN",
+  epi$new_annotation
+)
+epi$new_annotation <- gsub(
+  "TumorAdj_PanIN/GLTumor",
+  "TumorAdj_PanIN",
+  epi$new_annotation
+)
+epi$new_annotation <- gsub("Tumor_PanIN/GLTumor", "GLTumor", epi$new_annotation)
+DefaultAssay(epi) <- 'Spatial'
+epi <- RunUMAP(epi, reduction = 'integrated.rpca', dims = 1:50)
+epi$new_annotation <- factor(
+  epi$new_annotation,
+  levels = c("Donor_PanIN", "TumorAdj_PanIN", "GLTumor", "PDTumor")
+)
+qsave(epi, "outputs/Epithelial_Analysis/epi.qs")
+```
+
+## 3 Pseudotime Analysis
+
+Here we will run Pseudotime analysis using Palantir [@palantir] on the neoplastic domains (PanINs, GLTumor, PDTumor).
+
+### 3.1 Environment Setup
+
+The exact conda environment used in this run can be installed using this [yml](envs/palantir.yml) file using `conda env create -f palantir.yml`
+
+```{r}
+use_condaenv("path/to/conda/envs/cellrank/")
+
+ad <- import("anndata", convert = T)
+scipy <- import("scipy", convert = T)
+sc <- import('scanpy', convert = T)
+pd <- import('pandas', convert = T)
+pl <- import('palantir', convert = F)
+```
+
+### 3.2 Convert Seurat to AnnData
+
+We will convert the seurat object to anndata object to use with Palantir.
+
+```{r}
+adata <- ad$AnnData(
+  X = scipy$sparse$csr_matrix(
+    Matrix::t(LayerData(epi, assay = 'Spatial', layer = 'data'))
+  ),
+  obs = epi@meta.data
+)
+adata$obs_names <- colnames(epi)
+adata$var_names <- rownames(epi)
+adata$obsm$X_integrated.rpca <- epi@reductions$integrated.rpca@cell.embeddings
+```
+
+### 3.3 Run Palantir
+
+We will run palantir on the AnnData object, we will choose a cell from Donor PanINs as a root node. We use Monocle3 [@monocle3] to interactively choose a cell and determine the cell name for the `start_cell` argument in Palantir. We then add the pseudotime results to the original Seurat object.
+
+```{r}
+## Palantir Preprocessing
+sc$pp$neighbors(adata, use_rep = 'X_integrated.rpca')
+pl$utils$run_diffusion_maps(
+  adata,
+  pca_key = 'X_integrated.rpca',
+  n_components = as.integer(5)
+)
+pl$utils$determine_multiscale_space(adata)
+pl$utils$run_magic_imputation(adata)
+
+## Choosing root node
+cds <- as.cell_data_set(epi)
+choose_cells(cds)
+start_cell = 'AIH3216_C1_TAAGACTACCTGTCGG-1'
+
+## Running Palantir
+pl$core$run_palantir(
+  adata,
+  early_cell = start_cell
+)
+
+pl$presults$select_branch_cells(adata, q = .01, eps = .01)
+pl$presults$compute_gene_trends(
+  adata,
+  expression_key = "MAGIC_imputed_data",
+)
+
+adata$write_h5ad("outputs/Epithelial_Analysis/palantir_processed_epi.h5ad")
+epi <- AddMetaData(
+  epi,
+  py_to_r(adata$obs) %>% dplyr::select('palantir_pseudotime')
+)
+FeaturePlot(epi, features = 'palantir_pseudotime') +
+  scale_color_viridis_c() +
+  ggtitle("Estimated Pseudotime")
+qsave(epi, "outputs/Epithelial_Analysis/epi_w_palantir_pseudotime.qs")
+```
+
+### 3.4 Clustering gene trends
+
+This part hasn't been included in the manuscript. Here we are clustering the genes based on their pseudotime expression trends.
+
+```{r}
+# Gene trends clustering
+gene_trends <- adata$varm[['gene_trends_SU-21-2784_B15_GGTTACGTCAAGCAGG-1']]
+pseudotime_vec <- as.numeric(colnames(gene_trends))
+rownames(gene_trends) <- rownames(epi)
+geneVar <- rowVars(as.matrix(gene_trends))
+hvg <- geneVar[order(geneVar, decreasing = T)][1:2000] %>% names()
+epi_markers <- scRef_markers %>%
+  filter(cluster == 'Tumor_Epithelial' & p_val_adj < 0.05 & avg_log2FC > 2) %>%
+  pull(gene)
+genes_of_interest <- intersect(hvg, epi_markers)
+# genes_of_interest <- unique(c(unlist(upreg_genes), unlist(dnreg_genes)))
+filtered_gene_trends <- gene_trends[genes_of_interest, ]
+scaled_gene_trends <- scale(t(filtered_gene_trends))
+scaled_gene_trends_pca <- pca(scaled_gene_trends)
+elbow <- findElbowPoint(scaled_gene_trends_pca$variance)
+
+genes_seurat <- CreateSeuratObject(scaled_gene_trends)
+genes_seurat[['pca']] <- CreateDimReducObject(
+  embeddings = as.matrix(scaled_gene_trends_pca$rotated),
+  loadings = as.matrix(scaled_gene_trends_pca$loadings),
+  stdev = sqrt(scaled_gene_trends_pca$variance),
+  assay = 'RNA',
+  key = 'pca_'
+)
+genes_seurat <- FindNeighbors(genes_seurat, reduction = 'pca', dims = 1:elbow)
+genes_seurat <- RunUMAP(genes_seurat, reduction = 'pca', dims = 1:elbow)
+genes_seurat <- FindClusters(genes_seurat, algorithm = 4)
+new_idents <- paste0("GeneSet", seq(1:9))
+names(new_idents) <- c(2, 4, 7, 6, 5, 3, 8, 1, 9)
+genes_seurat <- RenameIdents(genes_seurat, new_idents)
+genes_seurat$geneset <- Idents(genes_seurat)
+qsave(genes_seurat, "outputs/Epithelial_Analysis/genes_seurat.qs")
+genes_seurat <- qread("outputs/Epithelial_Analysis/genes_seurat.qs")
+
+## Plotting
+clusters <- genes_seurat@meta.data %>%
+  dplyr::select(geneset) %>%
+  rownames_to_column() %>%
+  `colnames<-`(c("gene", "cluster"))
+clusters$cluster <- as.character(clusters$cluster)
+trends <- t(scaled_gene_trends) %>%
+  data.frame() %>%
+  rownames_to_column('gene') %>%
+  melt() %>%
+  `colnames<-`(c("gene", "pseudotime", 'expression')) %>%
+  mutate(pseudotime = gsub("^X", "", pseudotime)) %>%
+  mutate(
+    pseudotime = as.numeric(pseudotime),
+    expression = as.numeric(expression)
+  ) %>%
+  merge(clusters, by = 'gene')
+
+
+genes_seurat$geneset <- factor(genes_seurat$geneset, levels = new_idents)
+ann <- data.frame(
+  pseudotime = as.numeric(rownames(scaled_gene_trends)),
+  row.names = rownames(scaled_gene_trends)
+)
+ann_cols = list(
+  pseudotime = viridis(dim(scaled_gene_trends)[1]),
+  geneset = setNames(brewer.pal(9, "Set1"), levels(genes_seurat$geneset))
+)
+row_ann <- genes_seurat@meta.data %>% dplyr::select(geneset)
+pheatmap(
+  t(scaled_gene_trends)[order(genes_seurat$geneset), ],
+  annotation_names_row = T,
+  annotation_row = row_ann,
+  annotation_col = ann,
+  annotation_colors = ann_cols,
+  show_colnames = F,
+  show_rownames = F,
+  fontsize = 5,
+  cluster_cols = F,
+  cluster_rows = F
+)
+
+ggplot(trends, aes(x = pseudotime, y = expression, group = gene)) +
+  geom_line() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  facet_wrap(~cluster)
+
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+geneid <- mapIds(
+  org.Hs.eg.db,
+  keys = colnames(genes_seurat),
+  column = "ENTREZID",
+  keytype = "SYMBOL",
+  multiVals = "first"
+) %>%
+  data.frame() %>%
+  `colnames<-`('geneid')
+genes_seurat <- AddMetaData(genes_seurat, geneid)
+hallmarks_enrich <- genes_seurat@meta.data %>%
+  dplyr::select(geneset, geneid) %>%
+  rownames_to_column(var = 'gene') %>%
+  group_by(geneset) %>%
+  # reframe(enrichment = enrichWP(geneid, organism = "Homo sapiens")@result)
+  reframe(enrichment = enricher(gene, TERM2GENE = term2gene)@result) %>%
+  unnest(cols = c(enrichment)) %>%
+  mutate(ID = gsub("HALLMARK_", "", ID))
+
+plot_df <- hallmarks_enrich %>%
+  filter(p.adjust < 0.05) %>%
+  dplyr::select(geneset, p.adjust, ID, Count)
+
+ggplot(
+  plot_df,
+  aes(
+    x = Count,
+    y = reorder_within(ID, within = geneset, by = Count),
+    fill = p.adjust
+  )
+) +
+  geom_bar(stat = 'identity') +
+  scale_y_reordered() +
+  scale_fill_gradient(low = "red", high = "blue") +
+  facet_wrap(~geneset, ncol = 1, scales = 'free') +
+  theme_bw() +
+  theme(
+    axis.text.y = element_text(size = 7, face = 'bold'),
+    legend.position = 'left'
+  ) +
+  ylab(NULL) +
+  xlab("Gene Count")
+
+
+cellType_pseudotime <- epi@meta.data %>%
+  dplyr::select(clusters, palantir_pseudotime) %>%
+  `colnames<-`(c("cellType", "pseudotime")) %>%
+  mutate(y_coord = -4)
+exp <- GetAssayData(epi, assay = 'Spatial', layer = 'scale.data')['GKN1', ]
+exp <- merge(data.frame(exp), cellType_pseudotime, by = 0)
+exp_trend <- trends %>% filter(gene == 'GKN1')
+ggplot() +
+  geom_line(data = exp_trend, mapping = aes(x = pseudotime, y = expression))
+# theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+# geom_jitter(data = exp, height = 0.5, size = 0.5, mapping = aes(x = pseudotime, y = exp, color = cellType))
+```
+
+## 4 BayesPrism Pseudobulk Deconvolution
+
+Due to convolved nature of Visium profiling, we will use BayesPrism [@bayesprism] for deconvolution of the neoplastic domains to extract their epithelial-specific expression. 
+
+### 4.1 Generate scRNAseq reference for BayesPrism
+
+We will remove the Adjacent normal samples and T cells cluster that was found to have high ribosomal genes. BayesPrism takes `celltypes` and `cellstates` arguments which represents two heirarchecal levels of annotation. We will use the **Cell Types** as our `celltypes`, where as **Cell Types & Tissue** as our `cellstates`.
+
+```{r}
+scRef <- subset(scRef, subset = tissue != 'AdjNormal')
+scRef <- subset(scRef, subset = main_annotation_scvi != 'T_Cells(Hi_Rb)')
+scRef$main_annotation_scvi_tissue <- paste0(
+  scRef$main_annotation_scvi,
+  "_",
+  scRef$tissue
+)
+
+metadata <- scRef@meta.data
+sc.dat <- t(GetAssayData(scRef, assay = 'RNA', layer = 'counts'))
+rm(scRef)
+gc()
+sc.dat.filtered <- cleanup.genes(
+  input = as.matrix(sc.dat),
+  input.type = "count.matrix",
+  species = "hs",
+  gene.group = c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY"),
+  exp.cells = 10
+)
+sc.dat.filtered.pc <- select.gene.type(
+  sc.dat.filtered,
+  gene.type = "protein_coding"
+)
+rm(sc.dat.filtered)
+gc()
+scRef <- list(sc.dat = sc.dat.filtered.pc, metadata = metadata)
+```
+
+### 4.2 Pseudobulk Deconvolution
+
+Here we aggregate the counts of each spatial domain (PanINs, GLTumor, PDTumor) in each sample to generate a (gene x samples spatial domain) matrix that will be used as an input for BayesPrism
+
+```{r}
+## Generating Pseudobulk profile
+epi_aggregate <- AggregateExpression(
+  epi,
+  group.by = c("sample_id", "tissue", "new_annotation"),
+  assays = 'Spatial',
+  return.seurat = T
+)
+
+## Setup for BayesPrism
+ct_mtx <- as.matrix(t(
+  AggregateExpression(
+    epi,
+    group.by = c("sample_id", "tissue", "new_annotation"),
+    assays = 'Spatial'
+  )$Spatial
+))
+intersect_genes <- intersect(colnames(ct_mtx), colnames(bp_scRef$sc.dat))
+myPrism <- new.prism(
+  reference = bp_scRef$sc.dat[, intersect_genes],
+  mixture = ct_mtx[, intersect_genes],
+  input.type = "count.matrix",
+  cell.type.labels = bp_scRef$metadata$main_annotation_scvi,
+  cell.state.labels = bp_scRef$metadata$main_annotation_scvi_tissue,
+  key = 'Tumor_Epithelial'
+)
+
+## Running BayesPrism
+bp_res <- run.prism(myPrism, n.cores = parallel::detectCores() - 1)
+
+## Saving results to the aggregated seurat object
+epi_aggregate[['epiexp']] <- CreateAssayObject(round(t(get.exp(
+  bp_res,
+  state.or.type = 'type',
+  cell.name = 'Tumor_Epithelial'
+))))
+epi_aggregate[['fractions']] <- CreateAssayObject(round(t(get.fraction(
+  bp_res,
+  which.theta = 'final',
+  state.or.type = 'type'
+))))
+epi_aggregate$new_annotation <- gsub("-", "_", epi_aggregate$new_annotation)
+epi_aggregate$new_annotation <- factor(
+  epi_aggregate$new_annotation,
+  levels = c("Donor_PanIN", "TumorAdj_PanIN", "GLTumor", "PDTumor")
+)
+epi_aggregate@assays$epiexp$data <- vst(as.matrix(GetAssayData(
+  epi_aggregate,
+  assay = 'epiexp',
+  layer = 'counts'
+)))
+qsave(epi_aggregate, "outputs/Epithelial_Analysis/epi_aggregate.qs")
+```
+
+### 4.3 Differential Gene Expression Analysis for the epithelial-specific expression
+
+We will use DESeq2 [@DESeq2] for differential gene expression analysis using the extracted epithelial-specific expression matrix.
+
+```{r}
+## DESeq2 Setup
+ct_data <- GetAssayData(epi_aggregate, assay = 'epiexp', layer = 'counts')
+colData <- epi_aggregate@meta.data
+run_id <- samples_info %>%
+  dplyr::select(patient_id, run_id) %>%
+  dplyr::rename(sample_id = patient_id) %>%
+  mutate(sample_id = gsub("\\_", "-", sample_id)) %>%
+  data.frame()
+colData <- merge(colData, run_id, by = 'sample_id') %>%
+  column_to_rownames(var = 'orig.ident')
+
+# PCA
+vst <- vst(as.matrix(ct_data))
+gene_variance <- rowVars(vst)
+top_genes <- names(sort(gene_variance, decreasing = TRUE)[1:2000])
+vst <- vst[top_genes, ]
+pca <- pca(vst, colData)
+qsave(pca, "outputs/Epithelial_Analysis/epi_pca.qs")
+cols = c(
+  "Donor_PanIN" = 'green3',
+  "TumorAdj_PanIN" = 'darkblue',
+  "GLTumor" = "darkred",
+  "PDTumor" = "purple"
+)
+biplot(
+  pca,
+  colby = 'new_annotation',
+  colkey = cols,
+  lab = NULL,
+  encircle = T,
+  legendTitleSize = 0,
+  legendPosition = 'right'
+)
+
+# DE using GoL as reference
+dds <- DESeqDataSetFromMatrix(
+  countData = ct_data,
+  colData = colData,
+  design = ~ run_id + new_annotation
+)
+dds <- DESeq(dds)
+qsave(dds, "outputs/Epithelial_Analysis/epi_deseq_object.qs")
+```
+
+### 4.4 DEGs
+#### 4.4.1 GLTumor vs Donor_PanIN DE
+```{r}
+TumorPanIN_v_GoL_PanIN <- lfcShrink(
+  dds,
+  coef = 'new_annotation_Tumor_PanIN.GLTumor_vs_Donor_PanIN',
+  type = 'ashr'
+) %>%
+  data.frame()
+write.csv(
+  TumorPanIN_v_GoL_PanIN,
+  "outputs/Epithelial_Analysis/TumorPanIN_v_GoLPanIN_DEGs.csv"
+)
+
+EnhancedVolcano(
+  TumorPanIN_v_GoL_PanIN,
+  rownames(TumorPanIN_v_GoL_PanIN),
+  'log2FoldChange',
+  'padj',
+  pCutoff = 0.05,
+  title = 'Tumor_PanIN/GLTumor vs Donor_PanIN',
+  subtitle = NULL,
+  drawConnectors = T,
+  labSize = 2,
+  titleLabSize = 15,
+  legendPosition = 'none',
+  caption = NULL,
+  # border = 'full',
+  axisLabSize = 10
+)
+
+```
+
+#### 4.4.2 PDTumor vs GLTumor DE
+```{r}
+tumor_epi_aggregate <- epi_aggregate[,
+  epi_aggregate$new_annotation %in% c('Tumor_PanIN/GLTumor', 'PDTumor')
+]
+ct_data <- GetAssayData(tumor_epi_aggregate, assay = 'epiexp', layer = 'counts')
+colData <- tumor_epi_aggregate@meta.data
+colData$new_annotation <- factor(
+  as.character(colData$new_annotation),
+  levels = c("Tumor_PanIN/GLTumor", "PDTumor")
+)
+dds <- DESeqDataSetFromMatrix(
+  countData = ct_data,
+  colData = colData,
+  design = ~ sample_id + new_annotation
+)
+dds <- DESeq(dds)
+
+PDTumor_v_Tumor_PanIN <- lfcShrink(
+  dds,
+  coef = 'new_annotation_PDTumor_vs_Tumor_PanIN.GLTumor',
+  type = 'ashr'
+) %>%
+  data.frame()
+write.csv(
+  PDTumor_v_Tumor_PanIN,
+  "outputs/Epithelial_Analysis/PDTumor_v_Tumor_PanIN_DEGs.csv"
+)
+PDTumor_v_Tumor_PanIN_w_stat <- results(
+  dds,
+  name = 'new_annotation_PDTumor_vs_Tumor_PanIN.GLTumor'
+) %>%
+  data.frame()
+write.csv(
+  PDTumor_v_Tumor_PanIN_w_stat,
+  "outputs/Epithelial_Analysis/PDTumor_v_Tumor_PanIN_DEGs_w_stat.csv"
+)
+
+PDTumor_v_Tumor_PanIN <- read.csv(
+  "outputs/Epithelial_Analysis/PDTumor_v_Tumor_PanIN_DEGs.csv",
+  row.names = 1
+)
+p3 <- EnhancedVolcano(
+  PDTumor_v_Tumor_PanIN,
+  rownames(PDTumor_v_Tumor_PanIN),
+  'log2FoldChange',
+  'padj',
+  pCutoff = 0.05,
+  title = 'PDTumor vs Tumor_PanIN/GLTumor',
+  subtitle = NULL,
+  drawConnectors = T,
+  labSize = 2,
+  titleLabSize = 15,
+  legendPosition = 'none',
+  caption = NULL,
+  border = 'full',
+  axisLabSize = 10
+)
+```
+
+### 4.3 GSEA
+
+We will use MSigDB Hallmark gene sets [@msigdb]downloaded using `msigdbr` R package [@msigdbr]. We will use `clusterProfiler` [@clusterprofiler] that implements `fgsea` [@fgsea] for calculation of enrichment scores.
+
+```{r}
+hallmark_sets <- msigdbr(species = 'Homo sapiens', category = "H") %>%
+  dplyr::select(gs_name, gene_symbol) %>%
+  mutate(gs_name = gsub("^HALLMARK_", "", gs_name))
+
+TumorPanIN_v_GoL_PanIN <- TumorPanIN_v_GoL_PanIN %>% filter(!is.na(padj))
+TumorPanIN_vs_GoLPanIN_rank <- setNames(
+  TumorPanIN_v_GoL_PanIN$log2FoldChange,
+  rownames(TumorPanIN_v_GoL_PanIN)
+)
+TumorPanIN_vs_GoLPanIN_rank <- sort(TumorPanIN_vs_GoLPanIN_rank, decreasing = T)
+TumorPanIN_vs_GoLPanIN_gsea <- GSEA(
+  TumorPanIN_vs_GoLPanIN_rank,
+  TERM2GENE = hallmark_sets,
+  pvalueCutoff = 1
+)
+ridgeplot(TumorPanIN_vs_GoLPanIN_gsea, showCategory = 20)
+qsave(
+  TumorPanIN_vs_GoLPanIN_gsea,
+  "outputs/Epithelial_Analysis/TumorPanIN_v_GoLPanIN_GSEA.qs"
+)
+
+PDTumor_v_Tumor_PanIN <- PDTumor_v_Tumor_PanIN %>% filter(!is.na(padj))
+PDTumor_vs_TumorPanIN_rank <- setNames(
+  PDTumor_v_Tumor_PanIN$log2FoldChange,
+  rownames(PDTumor_v_Tumor_PanIN)
+)
+PDTumor_vs_TumorPanIN_rank <- sort(PDTumor_vs_TumorPanIN_rank, decreasing = T)
+PDTumor_vs_TumorPanIN_gsea <- GSEA(
+  PDTumor_vs_TumorPanIN_rank,
+  TERM2GENE = hallmark_sets,
+  pvalueCutoff = 1
+)
+ridgeplot(PDTumor_vs_TumorPanIN_gsea, showCategory = 20)
+qsave(
+  PDTumor_vs_TumorPanIN_gsea,
+  "outputs/Epithelial_Analysis/PDTumor_v_TumorPanIN_GSEA.qs"
+)
+```
+
+## 5 Session Info
+```{r}
+#| eval: true
+sessionInfo()
+```

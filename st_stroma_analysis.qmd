@@ -1,0 +1,295 @@
+---
+title: "Spatial Transcriptomics Stromal Domains Analysis"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we will be analyzing the stroma-enriched regions in the spatial transcriptomics data. We will be using the same hierarchical deconvolution used for the Stromal domains analysis using BayesPrism [@bayesprism]. 
+
+## 1 Setup and import data
+
+```{r}
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(BayesPrism)
+  library(tidyverse)
+  library(qs)
+  library(spatstat)
+  library(DESeq2)
+  library(PCAtools)
+  library(tidytext)
+  library(GSVA)
+})
+
+samples_info <- readxl::read_xlsx("../data/visium_samples_manifest.xlsx")
+
+# Importing data ----------------------------------------------------------
+
+bp_scRef <- qread("outputs/Deconvolution/BayesPrism_scRef.qs")
+fibro <- qread("outputs/scRNAseq_Analysis/fibro_all.qs")
+macs <- qread("outputs/scRNAseq_Analysis/macs_all.qs")
+merged <- qs::qread("outputs/Spatial_Clustering/tumor_tumoradj_GoL_samples_annotated_v2_lite_new_deconv.qs")
+```
+
+## 2 Subsetting Fibroblasts-enriched domains
+
+```{r}
+cols <- scPalette(length(levels(merged$main_annotation)))
+names(cols) <- levels(merged$main_annotation)
+all_fibro <- subset(merged,
+                    subset = main_annotation %in% c("Fibro1", "Fibro2", "Fibro3", "Fibro4(Hi_Mt)"))
+histogram_samples <- ClusterDistrBar(all_fibro$tissue, all_fibro$main_annotation,
+                                     cols = cols, flip = F,
+                                     border = 'white', reverse_order = F) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab(NULL) + ylab("% of Total Fibroblast-Enriched Domains")
+
+stroma <- subset(merged, subset = main_annotation %in% c("Fibro2", "Fibro3"))
+stroma <- RunUMAP(stroma, reduction = 'integrated.rpca', dims = 1:50)
+qsave(stroma, "outputs/Fibroblasts_Analysis/spatial_stroma.qs")
+
+samples_keep <- table(stroma$sample_id, stroma$main_annotation) %>%
+  data.frame() %>%
+  filter(Freq > 50)
+stroma$sample_main_annotation <- paste0(stroma$sample_id, "_", stroma$main_annotation)
+stroma <- subset(stroma, subset = sample_main_annotation %in% paste0(samples_keep$Var1,"_", samples_keep$Var2))
+
+stroma_aggregate <- AggregateExpression(stroma, assays = 'Spatial', group.by = c("main_annotation", "tissue", "sample_id"), return.seurat = T)
+stroma_aggregate$main_annotation_tissue <- paste0(stroma_aggregate$main_annotation, "_", stroma_aggregate$tissue)
+```
+
+## 3 Generating scRef BayesPrism Reference
+
+```{r}
+# Creating scRef ----------------------------------------------------------
+scRef <- qread("outputs/scRNAseq_Analysis/scRef_filtered_integrated_annotated.qs")
+scRef <- subset(scRef, subset = tissue != 'AdjNormal')
+scRef <- subset(scRef, subset = main_annotation_scvi != 'T_Cells(Hi_Rb)')
+scRef$main_annotation_scvi_tissue <- paste0(scRef$main_annotation_scvi, "_", scRef$tissue)
+
+metadata <- scRef@meta.data
+sc.dat <- t(GetAssayData(scRef, assay = 'RNA', layer = 'counts'))
+sc.dat.filtered <- cleanup.genes(input=as.matrix(sc.dat),
+                                input.type="count.matrix",
+                                species="hs",
+                                gene.group=c("Rb","Mrp","other_Rb","chrM","MALAT1","chrX","chrY") ,
+                                exp.cells=10)
+sc.dat.filtered.pc <-  select.gene.type(sc.dat.filtered, gene.type = "protein_coding")
+rm(sc.dat.filtered); gc()
+scRef <- list(sc.dat = sc.dat.filtered.pc, metadata = metadata)
+```
+
+## 4 Extracting Fibroblast-specific expression from spatial domains
+
+```{r}
+ct_mtx <- as.matrix(t(GetAssayData(stroma_aggregate, assay = 'Spatial', layer = 'counts')))
+intersect_genes <- intersect(colnames(ct_mtx), colnames(bp_scRef$sc.dat))
+myPrism <- new.prism(
+  reference=bp_scRef$sc.dat[,intersect_genes],
+  mixture=ct_mtx[,intersect_genes],
+  input.type="count.matrix",
+  cell.type.labels = bp_scRef$metadata$main_annotation_scvi,
+  cell.state.labels = bp_scRef$metadata$main_annotation_scvi_tissue,
+  key = 'Tumor_Epithelial')
+bp_res <- run.prism(myPrism, n.cores = parallel::detectCores() - 1)
+
+stroma_aggregate[['fibroexp']] <- CreateAssayObject(round(t(get.exp(bp_res, state.or.type = 'type', cell.name = 'Fibroblasts'))))
+stroma_aggregate[['celltype_fractions']] <- CreateAssayObject(round(t(get.fraction(bp_res, which.theta = 'final', state.or.type = 'type')), digits = 2))
+stroma_aggregate@assays$fibroexp$data <- vst(as.matrix(GetAssayData(stroma_aggregate, assay = 'fibroexp', layer = 'counts')))
+```
+
+## 5 Pseudobulk DGE analysis
+
+We will use DESeq2 [@DESeq2] for differential expression analysis of the fibroblast-specific expression from Fibro2 and Fibro3 spatial domains.
+
+```{r}
+ct_data <- GetAssayData(stroma_aggregate, assay = 'fibroexp', layer = 'counts')
+colData <- stroma_aggregate@meta.data
+run_id <- samples_info %>%
+  dplyr::select(patient_id, run_id) %>%
+  dplyr::rename(sample_id = patient_id) %>% 
+  mutate(sample_id = gsub("\\_", "-", sample_id)) %>%
+  data.frame()
+colData <- merge(colData, run_id, by = 'sample_id') %>%
+  column_to_rownames(var = 'orig.ident')
+
+# PCA
+vst <- vst(as.matrix(ct_data))
+pca <- pca(vst, colData[colnames(vst),])
+qsave(pca, "outputs/Fibroblasts_Analysis/fibro_aggregate_pca.qs")
+biplot(pca,
+       colby = 'main_annotation',
+       lab = NULL,
+       shape = 'tissue',
+       encircle = F, legendTitleSize = 12,
+       legendPosition = 'right')
+
+colData$main_annotation <- factor(colData$main_annotation, levels = c("Fibro3", "Fibro2"))
+dds <- DESeqDataSetFromMatrix(countData = ct_data,
+                              colData = colData[colnames(ct_data),],
+                              design = ~ sample_id + main_annotation)
+
+dds <- DESeq(dds)
+stroma2_v_stroma3 <- lfcShrink(dds, coef = 'main_annotation_Fibro2_vs_Fibro3', type = 'ashr') %>% data.frame()
+
+EnhancedVolcano(
+  stroma3_v_stroma2,
+  rownames(stroma3_v_stroma2),
+  'log2FoldChange',
+  'padj',
+  pCutoff = 0.05,
+  title = 'Fibro3 vs Fibro2',
+  subtitle = NULL,
+  drawConnectors = T,
+  labSize = 2,
+  titleLabSize = 15,
+  legendPosition = 'none',
+  caption = NULL,
+  # border = 'full',
+  axisLabSize = 10
+) 
+```
+
+## 6 Hierarchical Deconvolution using scRNAseq-defined fibroblast subtypes
+
+Here we will be using Fibroblast subtypes defined from scRNAseq data to dissect the composition of Fibro2 and Fibro3 spatial domains.
+
+### 6.1 Generating fibroblasts scRNAseq BayesPrism Reference
+
+We will remove the AdjNormal tissue samples from scRNAseq reference in the analysis as we described in [Epithelial Domains Analysis](st_epi_analysis.qmd)
+
+```{r}
+fibro <- subset(fibro, subset = tissue != 'AdjNormal')
+metadata <- fibro@meta.data
+metadata$fibro_subtypes_tissue <- paste0(metadata$fibro_subtypes, "_", metadata$tissue)
+sc.dat <- t(GetAssayData(fibro, assay = 'RNA', layer = 'counts'))
+sc.dat.filtered <- cleanup.genes(input=as.matrix(sc.dat),
+                                 input.type="count.matrix",
+                                 species="hs",
+                                 gene.group=c( "Rb","Mrp","other_Rb","chrM","MALAT1","chrX","chrY") ,
+                                 exp.cells=5)
+sc.dat.filtered.pc <-  select.gene.type(sc.dat.filtered, gene.type = "protein_coding")
+fibro_scRef <- list(sc.dat = sc.dat.filtered.pc, metadata = metadata)
+```
+
+### 6.2 Running BayesPrism
+
+```{r}
+ct_mtx <- as.matrix(t(GetAssayData(stroma_aggregate, assay = 'fibroexp', layer = 'counts')))
+intersect_genes <- intersect(colnames(ct_mtx), colnames(fibro_scRef$sc.dat))
+myPrism <- new.prism(
+  reference=fibro_scRef$sc.dat[,intersect_genes],
+  mixture=ct_mtx[,intersect_genes],
+  input.type="count.matrix",
+  cell.type.labels = fibro_scRef$metadata$fibro_subtypes,
+  cell.state.labels = fibro_scRef$metadata$fibro_subtypes_tissue,
+  key = NULL)
+fibro_bp_res <- run.prism(myPrism, n.cores = parallel::detectCores() - 1)
+qsave(fibro_bp_res, "outputs/Fibroblasts_Analysis/fibro_subtypes_F2F3.qs")
+
+stroma_aggregate[['subtype_fractions']] <- CreateAssayObject(round(t(get.fraction(fibro_bp_res, which.theta = 'final', state.or.type = 'type')), digits = 2))
+DefaultAssay(stroma_aggregate) <-  'subtype_fractions'
+qsave(stroma_aggregate, "outputs/Fibroblasts_Analysis/fibroblast_subtypes_deconvolution_F2F3.qs")
+```
+
+### 6.3 Visualizing Fibroblast Subtype Fractions
+
+```{r}
+avg <- AverageExpression(stroma_aggregate, assays = 'subtype_fractions', group.by = 'main_annotation_tissue')$subtype_fractions
+avg <- avg[c(4,7,1,3),c(2,4, 3,1)]
+pheatmap(as.data.frame(avg), cluster_cols = F, cluster_rows = F, color = viridis(n = 100, option = 'B', direction = 1), cellwidth = 40, cellheight = 20)
+
+ann <- stroma_aggregate@meta.data %>% dplyr::select(new_annotation)
+ann$new_annotation <- factor(ann$new_annotation,
+                             levels = c("Fibro3_GoL", "Fibro3_Tumor", "Fibro2_Tumor"))
+fractions <- get.fraction(fibro_bp_res, which.theta = 'final', state.or.type = 'type')
+pheatmap(t(fractions)[c(4,7,1,3),order(ann$new_annotation)], 
+         cellwidth = 10, cellheight = 10,
+         cluster_cols = F, cluster_rows = F, show_colnames = F, annotation_col = ann, viridis(option = 'B', n = 100, direction = 1))
+```
+
+## 7 Hierarchical Deconvolution using scRNAseq-defined macrophage subtypes
+
+### 7.1 Extracting Macrophage-specific expression from spatial domains
+
+```{r}
+spatial_macs <- subset(merged, subset = main_annotation == 'Macrophages' & tissue == "PDAC")
+spatial_macs_aggregate <- AggregateExpression(spatial_macs, assays = 'Spatial', group.by = c("sample_id"), return.seurat = T)
+
+ct_mtx <- as.matrix(t(GetAssayData(spatial_macs_aggregate, assay = 'Spatial', layer = 'counts')))
+intersect_genes <- intersect(colnames(ct_mtx), colnames(bp_scRef$sc.dat))
+myPrism <- new.prism(
+  reference=bp_scRef$sc.dat[,intersect_genes],
+  mixture=ct_mtx[,intersect_genes],
+  input.type="count.matrix",
+  cell.type.labels = bp_scRef$metadata$main_annotation_scvi,
+  cell.state.labels = bp_scRef$metadata$main_annotation_scvi_tissue,
+  key = 'Tumor_Epithelial')
+bp_res <- run.prism(myPrism, n.cores = parallel::detectCores() - 1)
+
+spatial_macs_aggregate[['macexp']] <- CreateAssayObject(round(t(get.exp(bp_res, state.or.type = 'type', cell.name = 'Macrophages'))))
+spatial_macs_aggregate[['celltype_fractions']] <- CreateAssayObject(round(t(get.fraction(bp_res, which.theta = 'final', state.or.type = 'type')), digits = 2))
+spatial_macs_aggregate@assays$macexp$data <- vst(as.matrix(GetAssayData(spatial_macs_aggregate, assay = 'macexp', layer = 'counts')))
+```
+
+### 7.2 Hierarchical Deconvolution using scRNAseq-defined fibroblast subtypes
+
+#### 7.2.1 Generating macrophages scRNAseq BayesPrism Reference
+
+```{r}
+macs <- subset(macs, subset = tissue != 'AdjNormal')
+metadata <- macs@meta.data
+metadata$macs_subtypes_tissue <- paste0(metadata$macs_subtypes, "_", metadata$tissue)
+sc.dat <- t(GetAssayData(macs, assay = 'RNA', layer = 'counts'))
+sc.dat.filtered <- cleanup.genes(input=as.matrix(sc.dat),
+                                 input.type="count.matrix",
+                                 species="hs",
+                                 gene.group=c( "Rb","Mrp","other_Rb","chrM","MALAT1","chrX","chrY") ,
+                                 exp.cells=5)
+sc.dat.filtered.pc <-  select.gene.type(sc.dat.filtered, gene.type = "protein_coding")
+macs_scRef <- list(sc.dat = sc.dat.filtered.pc, metadata = metadata)
+```
+
+#### 7.2.2 Running BayesPrism
+
+```{r}
+ct_mtx <- as.matrix(t(GetAssayData(spatial_macs_aggregate, assay = 'macexp', layer = 'counts')))
+intersect_genes <- intersect(colnames(ct_mtx), colnames(macs_scRef$sc.dat))
+myPrism <- new.prism(
+  reference=macs_scRef$sc.dat[,intersect_genes],
+  mixture=ct_mtx[,intersect_genes],
+  input.type="count.matrix",
+  cell.type.labels = macs_scRef$metadata$macs_subtypes,
+  cell.state.labels = macs_scRef$metadata$macs_subtypes_tissue,
+  key = NULL)
+macs_bp_res <- run.prism(myPrism, n.cores = parallel::detectCores() - 1)
+```
+
+#### 7.2.3 Visualizing Fibroblast Subtype Fractions
+
+```{r}
+spatial_macs_aggregate[['subtype_fractions']] <- CreateAssayObject(round(t(get.fraction(macs_bp_res, which.theta = 'final', state.or.type = 'type')), digits = 2))
+DefaultAssay(spatial_macs_aggregate) <-  'subtype_fractions'
+qsave(spatial_macs_aggregate, "outputs/Macs_Analysis/macs_subtypes_deconvolution.qs")
+
+plot_df <- GetAssayData(spatial_macs_aggregate, assay = 'subtype_fractions') %>%
+  data.frame() %>%
+  rownames_to_column("mac_subtype") %>%
+  pivot_longer(cols = -mac_subtype, values_to = 'fraction')
+
+ggplot(plot_df, aes(x = reorder_within(x = mac_subtype, within = mac_subtype, by = fraction), y = fraction)) +
+  geom_boxplot() +
+  scale_x_reordered() +
+  labs(x = "Macrophage Subtype", y = "Fraction", title = "Macrophage Subtype Fractions in Spatial Domains") +
+  theme_minimal()
+```

@@ -1,0 +1,97 @@
+---
+title: "Spatial Transcriptomics Cell Type Deconvolution"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+## 1 Setup & Data Loading
+
+Here we load essential packages and `visium_samples_manifest.xlsx` from the data directory, that includes information about visium samples. We will use Robust Cell Type Deconvolution (RCTD) [@rctd] for the deconvolution.
+
+```{r}
+suppressPackageStartupMessages({
+  library(spacexr)
+  library(Seurat)
+  library(Matrix)
+  library(doParallel)
+  library(ggplot2)
+  library(tidyverse)
+  library(slurmR)
+  library(qs)
+})
+
+outputDir <- "../outputs/Deconvolution/RCTD"
+dir.create(outputDir, recursive = T, showWarnings = F)
+samples_info <- readxl::read_xlsx("../data/visium_samples_manifest.xlsx")
+```
+
+## 2 Reference Creation
+
+* Here we create a reference object for the RCTD analysis using the filtered and annotated single-cell RNA-seq data created using the scRNAseq workflow described here. The scRNAseq reference object can be downloaded from Zenodo [here]().
+
+* We use `slurmR` to parallelize the RCTD analysis across multiple samples on U-M HPC, alternatively user can use `lapply` to run the analysis locally. The results are saved as `.rds` objects that will be loaded and added to the integrated seurat spatial object in [Clustering Analysis](st_clustering.qmd)
+
+```{r}
+scRef <- qread("../outputs/scRNAseq_Analysis/scRef.qs")
+
+scRef <- Reference(
+  counts = GetAssayData(scRef, assay = 'RNA', layer = 'count'),
+  n_max_cells = max(table(scRef$cellType)),
+  cell_types = factor(scRef$cellType)
+)
+
+slurm_jobs <- Slurm_lapply(
+  njobs = length(samples),
+  job_name = "RCTD",
+  tmp_path = getwd(),
+  plan = "none",
+  sbatch_opt = list(
+    partition = 'standard',
+    account = '',
+    mem = '180G',
+    "cpus-per-task" = "8",
+    time = "24:00:00"
+  ),
+  export = c("scRef"),
+  overwrite = TRUE,
+  X = as.list(samples),
+  FUN = function(x) {
+    sample <- readRDS(paste0(
+      "../outputs/Preprocessing/spatial_seurat_objects/",
+      x,
+      ".rds"
+    ))
+    sample_coord <- GetTissueCoordinates(sample)[, c("x", "y")]
+    spatial_obj <- SpatialRNA(
+      coords = sample_coord,
+      counts = round(GetAssayData(sample, assay = 'Spatial', layer = 'counts'))
+    )
+    rctd_res <- create.RCTD(
+      spatial_obj,
+      scRef,
+      max_cores = parallel::detectCores()
+    ) %>%
+      run.RCTD(doublet_mode = 'multi')
+
+    saveRDS(rctd_res, paste0('../outputs/Deconvolution/RCTD/', x, ".rds"))
+    return(NULL)
+  }
+)
+sbatch(slurm_jobs)
+```
+
+## 3 Session Info
+
+```{r}
+#| eval: true
+sessionInfo()
+```

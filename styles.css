@@ -1,0 +1,15 @@
+/* Open navbar dropdown on hover */
+.navbar-nav .dropdown:hover > .dropdown-menu {
+  display: block;
+  margin-top: 0;
+}
+
+/* Optional: make the hover smoother */
+.dropdown-menu {
+  transition: all 0.1s ease;
+}
+
+pre code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}

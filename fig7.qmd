@@ -1,0 +1,307 @@
+---
+title: "Figure 7"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SeuratExtend)
+  library(CellChat)
+  library(BayesPrism)
+  library(tidyverse)
+  library(EnhancedVolcano)
+  library(qs)
+  library(SPATA2)
+  library(patchwork)
+  library(pheatmap)
+  library(numbat)
+})
+
+# Improting data ----
+
+scRef <- qread("../outputs/scRNAseq_Analysis/scRef_filtered_integrated_annotated.qs")
+scRef$main_annotation_scvi <- gsub("T_Cells\\(Hi_Ribo\\)", "T_Cells", scRef$main_annotation_scvi)
+scRef[['Cell Type']] <- factor(scRef$main_annotation_scvi,
+                               levels = c("CHRM3+","Acinar", "Acinar/ADM", "ADM", "Ducts", "Tumor_Epithelial",
+                                          "Macrophages", "Granulocytes", "T_Cells", "NK_Cells",
+                                          "B_Cells","Plasma", "Mast_Cells",
+                                          "Endothelial", "Lymphatic_Endothelial", "Endocrine",
+                                          "Fibroblasts","Pericytes",
+                                          "Neurons","Muscle"))
+scRef[['tissue']] <- factor(scRef$tissue, levels = c("Healthy", "AdjNormal", "PDAC"))
+
+spatial <- qread("../outputs/Spatial_Clustering/spatial.qs")
+fibro_aggregate <- qread("../outputs/Fibroblasts_Analysis/stroma_aggregate_F2F3.qs")
+epi <- qread("../outputs/Epithelial_Analysis/epi_aggregate.qs")
+organoids <- qread("../outputs/Organoids_Data_Analysis/integrated_obj_tumor_only.qs")
+
+DimPlot2(scRef, group.by = 'Cell Type', reduction = 'umap.scvi')
+
+DimPlot2(scRef, features = c("WNT2", "WNT5A"), reduction = 'umap.scvi', pt.size = 3, priority = 'expr')
+DimPlot2(scRef, features = c("WNT7A", "WNT7B", "WNT10A"), reduction = 'umap.scvi', pt.size = 2, priority = 'expr')
+DotPlot(scRef, features = , group.by = 'Cell Type')
+
+WNT_scRef_DotPlot <- DotPlot2(scRef, features = c("LEF1", "WNT2", "WNT5A", "WNT7A", "WNT7B", "WNT10A"),
+                              group.by = 'Cell Type', color_scheme = 'RdYlBu-rev', flip = T)
+ggsave("WNT_scRef_DotPlot.pdf", WNT_scRef_DotPlot, width = 5, height = 5, units = 'in', dpi = 1200)
+
+WNT_spatial_DotPlot <- DotPlot2(spatial, features = c("WNT2", "WNT5A", "WNT7A", "WNT7B", "WNT10A"),
+                                group.by = 'main_annotation', color_scheme = 'RdYlBu-rev', flip = T)
+ggsave("WNT_spatial_DotPlot.pdf", WNT_spatial_DotPlot, width = 5, height = 5, units = 'in', dpi = 1200)
+
+
+DefaultAssay(fibro_aggregate) <- 'fibroexp'
+fibro_aggregate$main_annotation <- factor(fibro_aggregate$main_annotation, levels = c("Fibro3", "Fibro2"))
+LEF1_Fibro2_Fibro3_boxplot <- VlnPlot2(fibro_aggregate, "LEF1", group.by = 'main_annotation', violin = F) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) +
+  NoLegend()
+
+WNT5A_Fibro2_Fibro3_boxplot <- VlnPlot2(fibro_aggregate, "WNT5A", group.by = 'main_annotation', violin = F) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) +
+  NoLegend()
+
+WNT2_Fibro2_Fibro3_boxplot <- VlnPlot2(fibro_aggregate, "WNT2", group.by = 'main_annotation', violin = F) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) +
+  NoLegend()
+
+WNT7A_PDTumor_boxplot <- VlnPlot2(epi, features = "WNT7A", group.by = 'new_annotation', violin = F) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) +
+  NoLegend()
+
+WNT7B_PDTumor_boxplot <- VlnPlot2(epi, features = "WNT7B", group.by = 'new_annotation', violin = F) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) +
+  NoLegend()
+
+WNT10A_PDTumor_boxplot <- VlnPlot2(epi, features = "WNT10A", group.by = 'new_annotation', violin = F) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) +
+  NoLegend()
+combined_lef1_wnt_boxplots <- wrap_plots(LEF1_Fibro2_Fibro3_boxplot, WNT2_Fibro2_Fibro3_boxplot, WNT5A_Fibro2_Fibro3_boxplot,
+                                         WNT7A_PDTumor_boxplot, WNT7B_PDTumor_boxplot, WNT10A_PDTumor_boxplot, nrow = 1)
+ggsave("combined_lef1_wnt_boxplots.pdf", combined_lef1_wnt_boxplots,  width = 10, height = 4, dpi = 300)
+
+organoids$final_annotation <- factor(organoids$final_annotation, levels = c("CAFs(Monoculture)", "CAFs(Coculture)", "TumorOrganoids(Monoculture)", "TumorOrganoids(Coculture)"))
+organoids_dimplot <- DimPlot(organoids, group.by = 'final_annotation', cols = c("darkred","blue", "darkorange", "darkgreen")) + 
+  theme(legend.position = 'top', legend.justification = 'center') +
+  guides(color = guide_legend(nrow = 2, override.aes = list(size = 3))) +
+  NoAxes() +
+  ggtitle(NULL)
+ggsave("organoids_dimplot.pdf", organoids_dimplot,  width = 6, height = 6, dpi = 300)
+
+organoids_fp <- DimPlot2(organoids, features = c("PDGFRA", "EPCAM", "COL1A1", "KRT19"), theme = list(NoAxes(), theme(legend.position = 'top', legend.justification = 'center'))) 
+ggsave("organoids_fp.pdf", organoids_fp,  width = 8, height = 6, dpi = 300)
+
+lef1_wnt_organoids_dotplot <- DotPlot2(organoids,
+                                       features = list("WNT Target" = "LEF1",
+                                                       "WNT Ligands" = c("WNT2", "WNT5A", "WNT7A", "WNT7B", "WNT10A"),
+                                                       "Classical PDAC Markers" = c("MUC5AC", "TFF1", "GATA6"),
+                                                       "Basal PDAC Markers" = c("KRT17", "S100A2", "KRT6A")),
+                                       group.by = 'final_annotation',
+                                       color_scheme = 'RdYlBu-rev', flip = T, legend_position = 'top') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) 
+ggsave("lef1_wnt_organoids_dotplot.pdf", lef1_wnt_organoids_dotplot,  width = 12, height = 3, dpi = 300)
+
+classical_basal_organoids_dotplot <- DotPlot2(organoids,
+                                       features = list(),
+                                       group.by = 'final_annotation',
+                                       color_scheme = 'RdYlBu-rev', flip = T) +
+  theme(legend.position = 'top',
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) 
+ggsave("classical_basal_organoids_dotplot.pdf", classical_basal_organoids_dotplot,  width = 8, height = 5, dpi = 300)
+
+wnt_ligands <- CellChatDB.human$interaction %>% filter(pathway_name %in% c("ncWNT", "WNT")) %>% pull(ligand) %>% unique()
+wnt_ligands <- wnt_ligands[order(as.numeric(str_extract(wnt_ligands, '\\d+')))]
+wnt_receptors <- CellChatDB.human$interaction %>% filter(pathway_name %in% c("ncWNT", "WNT")) %>%
+  pull(receptor) %>% strsplit("_") %>% unlist() %>% unique()
+wnt_downstream <- c("PORCN" ,"TCF3", "TCF4","TCF7","LEF1", "AXIN1","AXIN2")
+
+lef1_wnt_organoids_dotplot <- DotPlot2(organoids,
+                                       features = list("WNT Ligands" = wnt_ligands,
+                                                       "WNT Target" = wnt_receptors),
+                                       group.by = 'final_annotation',
+                                       color_scheme = 'RdYlBu-rev', flip = T) +
+  theme(legend.position = 'top',
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = 'bold'),
+        axis.text.y = element_text(size = 10)) 
+
+scRef_subset <- subset(scRef, subset = tissue != "AdjNormal")
+scRef_subset <- scRef_subset[,!(scRef_subset$tissue == "Healthy" & scRef_subset$main_annotation_scvi == 'Tumor_Epithelial')]
+spatial_subset <- subset(spatial, subset = tissue != "AdjNormal")
+spatial_subset <- spatial_subset[,!(spatial_subset$tissue == 'Healthy' & spatial_subset$main_annotation %in% c("Immune(TLS)", "Fibro2", "PDTumor"))]
+DefaultAssay(spatial_subset) <- 'Spatial'
+
+scRef_wnt <- DotPlot2(scRef_subset,
+                      features = list("WNT Ligands" = wnt_ligands,
+                                      "WNT Receptoprs" = wnt_receptors,
+                                      "WNT Downstream Targets" = wnt_downstream),
+                      group.by = 'Cell Type',
+                      split.by = 'tissue',
+                      color_scheme = 'RdYlBu-rev')
+ggsave("scRef_wnt.pdf", scRef_wnt,  width =15, height = 10, dpi = 300)
+
+
+spatial_wnt <- DotPlot2(spatial_subset,
+                        features = list("WNT Ligands" = wnt_ligands,
+                                        "WNT Receptoprs" = wnt_receptors,
+                                        "WNT Downstream Targets" = wnt_downstream),
+                        group.by = 'main_annotation',
+                        split.by = 'tissue',
+                        color_scheme = 'RdYlBu-rev')
+ggsave("spatial_wnt.pdf", spatial_wnt,  width = 15, height = 10, dpi = 300)
+
+scRef_wnt_subset <- DotPlot2(scRef_subset[, scRef_subset$`Cell Type` %in% c("Ducts", "Tumor_Epithelial", "Fibroblasts") & scRef_subset$tissue == 'PDAC'],
+                             features = list("WNT Ligands" = c("WNT2", "WNT5A", "WNT7A", "WNT10A"),
+                                             "WNT Receptoprs" = c("FZD1", "FZD2", "FZD5", "FZD6", "FZD7", "FZD8"),
+                                             "WNT Downstream Targets" = c("TCF3","AXIN1", "TCF4", "AXIN2", "LEF1")),
+                             group.by = 'Cell Type',
+                             scale = F,
+                             flip = T)
+ggsave("final_figures/WntFig1A.pdf", scRef_wnt_subset,  width = 10, height = 5, unit = 'in', dpi = 300)
+
+scRef_wnt_subset <- DotPlot(scRef_subset[, scRef_subset$`Cell Type` %in% c("Ducts", "Tumor_Epithelial", "Fibroblasts") & scRef_subset$tissue == 'PDAC'],
+                            features = c("WNT2", "WNT5A", "WNT7A", "WNT10A",
+                                         "FZD1", "FZD2", "FZD5", "FZD6", "FZD7", "FZD8",
+                                         "TCF3","AXIN1", "TCF4", "AXIN2", "LEF1"),
+                            group.by = 'Cell Type',
+                            scale = F) +
+  scale_color_gradientn(colors = viridis(100, option = 'B')) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("final_figures/WntFig1Aa.pdf", scRef_wnt_subset,  width = 10, height = 5, unit = 'in', dpi = 300)
+
+epi_wnt_featureplot <- FeaturePlot(sc_epi, c("WNT7A", "WNT10A"), order = T)
+ggsave("final_figures/WntFig1Aaa.pdf", epi_wnt_featureplot,  width = 10, height = 5, unit = 'in', dpi = 300)
+
+
+spatial_wnt_subset <- DotPlot2(spatial_subset[, spatial_subset$main_annotation %in% c("Fibro2", "Fibro3", "Ducts", "PanIN/GLTumor", "PDTumor") & spatial_subset$tissue == 'PDAC'],
+                               features = list("WNT Ligands" = c("WNT2", "WNT5A", "WNT7A", "WNT10A"),
+                                               "WNT Receptoprs" = c("FZD1", "FZD2", "FZD5", "FZD6", "FZD7", "FZD8"),
+                                               "WNT Downstream Targets" = c("TCF3","AXIN1", "TCF4", "AXIN2", "LEF1")),
+                               group.by = 'main_annotation',
+                               flip = T,
+                               color_scheme = 'RdYlBu-rev',
+                               legend_position = 'bottom')
+ggsave("final_figures/WntFig1B.pdf", spatial_wnt_subset,  width = 10, height = 5, dpi = 300)
+
+spatial_wnt_subset <- DotPlot(spatial_subset[, spatial_subset$main_annotation %in% c("Fibro2", "Fibro3", "Ducts", "PanIN/GLTumor", "PDTumor") & spatial_subset$tissue == 'PDAC'],
+                              features = c("WNT2", "WNT5A", "WNT7A", "WNT10A",
+                                           "FZD1", "FZD2", "FZD5", "FZD6", "FZD7", "FZD8",
+                                           "TCF3","AXIN1", "TCF4", "AXIN2", "LEF1"),
+                              group.by = 'main_annotation',
+                              scale = F)+
+  scale_color_gradientn(colors = viridis(100, option = 'B')) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("final_figures/WntFig1Bb.pdf", spatial_wnt_subset,  width = 10, height = 5, dpi = 300)
+
+fibro_subsets_wnt <- DotPlot2(sc_fibro,
+                              features = list("WNT Ligands" = c("WNT2", "WNT5A"),
+                                              "WNT Receptoprs" = c("FZD1", "FZD2", "FZD6", "FZD7"),
+                                              "WNT Downstream Targets" = c("TCF4", "AXIN2", "LEF1")),
+                              group.by = 'fibro_subtypes',
+                              flip = T,
+                              color_scheme = 'RdYlBu-rev')
+ggsave("final_figures/WntFig1C.pdf", fibro_subsets_wnt,  width = 10, height = 5, dpi = 300)
+
+fibro_subsets_wnt <- DotPlot(sc_fibro,
+                             features = c("WNT2", "WNT5A", "WNT7A", "WNT10A", "FZD1", "FZD2", "FZD5", "FZD6", "FZD7", "FZD8", "TCF3","AXIN1", "TCF4", "AXIN2", "LEF1"),
+                             group.by = 'fibro_subtypes',
+                             scale = F) +
+  scale_color_gradientn(colors = viridis(100, option = 'B')) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("final_figures/WntFig1Cc.pdf", fibro_subsets_wnt,  width = 10, height = 5, dpi = 300)
+
+
+tumor_moran <- qread("outputs/CCC/liana_res_mapped_tumor_morans.qs")
+gol_moran <-  qread("outputs/CCC/liana_res_mapped_gol_morans.qs")
+all_LR_GlobalMoran <- qread("outputs/CCC/all_LR_GlobalMoran.qs")
+diffItx <- qread("outputs/CCC/Differential_Itx.qs")
+cellchat_tumor <- qread("outputs/CCC/cellchat_tumor_all_domains.rds")
+cellchat_gol <- qread("outputs/CCC/cellchat_gol_all_domains.rds")
+average_TLS_dist <- qread("outputs/Misc/average_TLS_nhood_dist.qs")
+cols <- scPalette(length(levels(spatial$main_annotation)))
+names(cols) <- levels(spatial$main_annotation)
+
+tls_pie_chart <- ggplot(average_TLS_dist, aes(x = "", y = mean, fill = nhood)) +
+  geom_bar(stat = "identity", width = 1, color = 'white') +
+  coord_polar("y") +
+  theme_void() +
+  facet_wrap(~domain) +
+  scale_fill_manual(values = cols) +
+  NoLegend()
+ggsave("final_figures/SuppFig6Aa.pdf", tls_pie_chart, width = 5, height = 5, units = 'in', dpi = 1200)
+
+laminin_integrins <- c("LAMB3^ITGA2_ITGB1", "LAMB3^ITGA3_ITGB1","LAMB3^ITGA6_ITGB1", "LAMB3^ITGA6_ITGB4",
+                       "LAMC2^ITGA2_ITGB1", "LAMC2^ITGA3_ITGB1","LAMC2^ITGA6_ITGB4", "LAMC2^ITGA6_ITGB1",
+                       "LAMA3^ITGA2_ITGB1", "LAMA3^ITGA3_ITGB1", "LAMA3^ITGA6_ITGB1","LAMA3^ITGA6_ITGB4","LAMA3^ITGA6_ITGB4")
+collagen_integrins <- c("COL10A1^ITGA11_ITGB1", "COL10A1^ITGA2_ITGB1","COL10A1^ITGA1_ITGB1",
+                        "COL17A1^ITGA2_ITGB1","COL5A2^ITGA11_ITGB1","COL5A1^ITGA11_ITGB1",
+                        "")
+itx <- c("SPINT1^ST14", "EFNA1^EPHA2","CCN2^LRP1",
+         "MMP2^FGFR1", "POSTN^ITGAV_ITGB5", "POSTN^PTK7",
+         "PLAU^PLAUR","CCL19^CCR7",
+         "TFF1^MUC5AC", "TFF2^MUC6", "GCG^FAP", "SST^SSTR1", "SST^SSTR3"
+)
+
+df <- t(all_LR_GlobalMoran[,itx])
+colnames(df) <- all_LR_GlobalMoran$sample
+ann <- data.frame(tissue = all_LR_GlobalMoran$tissue, row.names = all_LR_GlobalMoran$sample)
+pheatmap(df, annotation_col = ann, cluster_cols = F, cluster_rows = F, scale = 'row')
+
+EnhancedVolcano(diffItx,
+                lab = diffItx$pair,
+                labSize = 0,
+                x = 'mean_difference',
+                y = 'p_adj',
+                FCcutoff = 0.1,
+                pCutoff = 0.05,
+                xlim = c(-0.5,0.5),
+                ylim = c(0,3),
+                title = "Differential Interactome Analysis",
+                subtitle = NULL,
+                xlab = "Mean Difference in LR Moran's I \n
+                \u2190 Interactions Enriched in GoL | Interactions Enriched in Tumor \u2192",
+                arrowheads = T, caption = NULL)
+
+all_samples_moran <- merge(tumor_moran, gol_moran)
+DefaultAssay(all_samples_moran) <- 'LRMoran'
+SpatialFeaturePlot(all_samples_moran, features = "LAMC2^ITGA2-ITGB1", images = c('SU.21.54126_D2'), pt.size.factor = 2)
+SpatialFeaturePlot(all_samples_moran, features = "LAMC2^ITGA2-ITGB1", images = c('AJGG315_C2'), pt.size.factor = 3)
+VlnPlot(tumor_moran, features = 'LAMC2^ITGA2-ITGB1', group.by = 'main_annotation', pt.size = 0) +
+  xlab(NULL) + ylab("Local Moran's I") + NoLegend()
+netVisual_aggregate(cellchat_tumor, signaling = 'LAMININ', sources.use = c("PanIN/GLTumor", "PDTumor"),label.edge = T, layout = "circle", edge.weight.max = 3.2)
+netVisual_aggregate(cellchat_gol, signaling = 'LAMININ', sources.use = c("PanIN/GLTumor"),label.edge = T, layout = "circle", edge.weight.max = 3.2)
+
+SpatialFeaturePlot(all_samples_moran, features = "CCL19^CCR7", images = c('SU.19.53682_B9'), pt.size.factor = 4)
+SpatialFeaturePlot(all_samples_moran, features = "CCL19^CCR7", images = c('AJGG315_C2'), pt.size.factor = 3)
+VlnPlot(tumor_moran, features = 'CCL19^CCR7', group.by = 'main_annotation', pt.size = 0) +
+  xlab(NULL) + ylab("Local Moran's I") + NoLegend()
+netVisual_individual(cellchat_tumor, signaling = 'CCL', pairLR.use = 'CCL19_CCR7', sources.use = c("Immune(TLS)"),label.edge = T, layout = "chord")
+netVisual_chord_cell(cellchat_tumor, pairLR.use = data.frame('interaction_name' = 'CCL19_CCR7'))
+
+netVisual_aggregate(cellchat_gol, signaling = 'LAMININ', sources.use = c("PanIN/GLTumor"),label.edge = T, layout = "circle", edge.weight.max = 3.2)
+
+SpatialFeaturePlot(all_samples_moran, features = 'SPINT1^ST14', images = c('AJGG315_C2','SU.21.54126_D2'), pt.size.factor = 3)
+ggplot(average_tumor_nhood_dist, aes(x = "", y = mean, fill = nhood)) +
+  geom_bar(stat = "identity", width = 1, color = 'white') +
+  coord_polar("y") +
+  theme_void() +
+  facet_wrap(~domain) +
+  scale_fill_manual(values = cols)
+```

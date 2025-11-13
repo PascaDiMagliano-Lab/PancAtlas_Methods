@@ -1,0 +1,473 @@
+---
+title: "Figure 6"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+```{r}
+# Setup ----
+
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SeuratExtend)
+  library(CellChat)
+  library(BayesPrism)
+  library(tidyverse)
+  library(EnhancedVolcano)
+  library(qs)
+  library(sf)
+  library(SPATA2)
+  library(patchwork)
+  library(pheatmap)
+  library(numbat)
+})
+
+# Improting data ----
+
+fiorini_data <- qread("../outputs/Xenium/xenium_data_fiorini_et_al/outputs/xenium_obj_harmony_integrated_w_fibro_scores.qs")
+fiorini_data_rdist <- qread("../outputs/Xenium/xenium_data_fiorini_et_al/outputs/xenium_obj_harmony_integrated_w_rdist.qs")
+fiorini_data <- AddMetaData(fiorini_data, metadata = fiorini_data_rdist@meta.data %>% select(r_dist_Tumor, r_dist_Tumor_sqrt))
+vr01_polygons <- qread("../outputs/Xenium/xenium_data_fiorini_et_al/outputs/VR01_cells_geometry.qs")
+vr06_polygons <- qread("../outputs/Xenium/xenium_data_fiorini_et_al/outputs/VR06_cells_geometry.qs")
+vr23_polygons <- qread("../outputs/Xenium/xenium_data_fiorini_et_al/outputs/VR23_cells_geometry.qs")
+
+bell_data <- qread("../outputs/Xenium/xenium_data_bell_et_al/outputs/xenium_obj_harmony_integrated_w_fibro_scores.qs")
+bell_data_rdist <- qread("../outputs/Xenium/xenium_data_bell_et_al/outputs/xenium_obj_harmony_integrated_w_rdist.qs")
+bell_data <- AddMetaData(bell_data, metadata = bell_data_rdist@meta.data %>% select(r_dist_PanIN_sqrt, r_dist_MUC5AC._PanIN_sqrt, r_dist_KRT17._PanIN_sqrt, r_dist_Ducts_sqrt))
+PanIN1131_S1A_polygons <- qread("../outputs/Xenium/xenium_data_bell_et_al/outputs/PanIN1131_S1A_cells_geometry.qs")
+PanIN1131_S1C_polygons <- qread("../outputs/Xenium/xenium_data_bell_et_al/outputs/PanIN1131_S1C_cells_geometry.qs")
+PanIN1132_polygons <- qread("../outputs/Xenium/xenium_data_bell_et_al/outputs/PanIN1132_cells_geometry.qs")
+PanIN1134_polygons <- qread("../outputs/Xenium/xenium_data_bell_et_al/outputs/PanIN1134_cells_geometry.qs")
+PanIN1144_polygons <- qread("../outputs/Xenium/xenium_data_bell_et_al/outputs/PanIN1144_cells_geometry.qs")
+
+fibro2_v_fibro2_DEGs <- read.csv("../outputs/Fibroblasts_Analysis/stroma2_v_stroma3_DEGs.csv", row.names = 1)
+
+cellTypes <- unique(c(levels(fiorini_data$annotation), levels(bell_data$annotation)))
+# cols <- scPalette(14)
+cols <- c("#984EA3","#377EB8","#B2DF8A","#E41A1C","#F29403","#F781BF","#BC9DCC","#2DAF5A","#1B9E77","#A65628","#54B0E4","#222F75","#984EA3","#FB9A99")
+names(cols) <-  cellTypes
+cols['PanIN/Tumor'] <- cols['Tumor']
+
+# all_cells_UMAP ----------------------------------------------------------
+
+bell_data_all_cells_dimplot <- DimPlot(
+  bell_data,
+  group.by = "annotation",
+  cols = cols,
+  raster = T,
+  raster.dpi = c(1200,1200),
+  pt.size = 2) +
+  ggtitle(NULL) +
+  NoAxes() +
+  ggtitle("Bell et al Xenium Dataset (5 samples, 423018 cells)")
+ggsave("bell_data_all_cells_dimplot.pdf", bell_data_all_cells_dimplot, width = 5, height = 5, dpi = 1200)
+
+bell_data$annotation2 <- ifelse(bell_data$annotation == 'PanIN/Tumor', as.character(bell_data$sub_annotation), as.character(bell_data$annotation))
+bell_data_all_cells_dimplot_sub_annotation <- DimPlot(
+  bell_data,
+  group.by = "annotation2",
+  cols = c(cols, "KRT17+_PanIN" = "#984EA3", "MUC5AC+_PanIN" = 'black'),
+  raster = T,
+  raster.dpi = c(1200,1200),
+  pt.size = 2) +
+  ggtitle(NULL) +
+  NoAxes() +
+  ggtitle("Bell et al Xenium Dataset (5 samples, 423018 cells)")
+ggsave("bell_data_all_cells_dimplot_sub_annotation.pdf", bell_data_all_cells_dimplot_sub_annotation, width = 5, height = 5, dpi = 1200)
+
+fiorini_data_all_cells_dimplot <- DimPlot(
+  fiorini_data,
+  group.by = "annotation",
+  cols = cols,
+  raster = T,
+  raster.dpi = c(1200,1200),
+  pt.size = 2) +
+  ggtitle(NULL) +
+  NoAxes() +
+  ggtitle("Fiorini et al Xenium Dataset (3 samples, 483858 cells)")
+ggsave("fiorini_data_all_cells_dimplot.pdf", fiorini_data_all_cells_dimplot, width = 5, height = 5, dpi = 1200)
+
+# All samples polygon plots -----------------------------------------------
+
+PanIN1131_S1A_plot <- ggplot(PanIN1131_S1A_polygons) +
+  rasterise(geom_sf(aes(fill = annotation), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = cols) +
+  theme_void() +
+  theme(panel.border = element_rect(color = 'black', fill = NA, size = 1)) +
+  ggtitle("PanIN1131_S1A") +
+  NoLegend()
+ggsave("PanIN1131_S1A_plot.pdf", PanIN1131_S1A_plot, width = 5, height = 5, dpi = 1200)
+
+PanIN1131_S1C_plot <- ggplot(PanIN1131_S1C_polygons) +
+  rasterise(geom_sf(aes(fill = annotation), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = cols) +
+  theme_void() +
+  theme(panel.border = element_rect(color = 'black', fill = NA, linewidth = 1)) +
+  ggtitle("PanIN1131_S1C") +
+  NoLegend()
+ggsave("PanIN1131_S1C_plot.pdf", PanIN1131_S1C_plot, width = 10, height = 5, dpi = 1200)
+
+PanIN1132_plot <- ggplot(PanIN1132_polygons) +
+  rasterise(geom_sf(aes(fill = annotation), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = cols) +
+  theme_void() +
+  theme(panel.border = element_rect(color = 'black', fill = NA, size = 1)) +
+  ggtitle("PanIN1132") +
+  NoLegend()
+ggsave("PanIN1132_plot.pdf", PanIN1132_plot, width = 5, height = 5, dpi = 1200)
+
+PanIN1134_plot <- ggplot(PanIN1134_polygons) +
+  rasterise(geom_sf(aes(fill = annotation), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = cols) +
+  theme_void() +
+  theme(panel.border = element_rect(color = 'black', fill = NA, size = 1)) +
+  ggtitle("PanIN1134") +
+  NoLegend()
+ggsave("PanIN1134_plot.pdf", PanIN1134_plot, width = 5, height = 5, dpi = 1200)
+
+PanIN1144_plot <- ggplot(PanIN1144_polygons) +
+  rasterise(geom_sf(aes(fill = annotation), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = cols) +
+  theme_void() +
+  theme(panel.border = element_rect(color = 'black', fill = NA, size = 1)) +
+  ggtitle("PanIN1144") +
+  NoLegend()
+ggsave("PanIN1144_plot.pdf", PanIN1144_plot, width = 5, height = 5, dpi = 1200)
+
+vr01_plot <- ggplot(vr01_polygons) +
+  rasterise(geom_sf(aes(fill = annotation), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = cols) +
+  theme_void() +
+  theme(panel.border = element_rect(color = 'black', fill = NA, size = 1)) +
+  ggtitle("VR01") +
+  NoLegend()
+ggsave("vr01_plot.pdf", vr01_plot, width = 5, height = 5, dpi = 1200)
+
+vr06_plot <- ggplot(vr06_polygons) +
+  rasterise(geom_sf(aes(fill = annotation), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = cols) +
+  theme_void() +
+  theme(panel.border = element_rect(color = 'black', fill = NA, size = 1)) +
+  ggtitle("VR06") +
+  NoLegend()
+ggsave("vr06_plot.pdf", vr06_plot, width = 5, height = 5, dpi = 1200)
+
+vr23_plot <- ggplot(vr23_polygons) +
+  rasterise(geom_sf(aes(fill = annotation), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = cols) +
+  theme_void() +
+  theme(panel.border = element_rect(color = 'black', fill = NA, size = 1)) +
+  ggtitle("VR23") +
+  NoLegend()
+ggsave("vr23_plot.pdf", vr23_plot, width = 5, height = 5, dpi = 1200)
+
+# Signatures --------------------------------------------------------------
+
+fibro_sig_cols <- c('fibro2_score_scaled' = "#A65628", 'fibro3_score_scaled' = "#54B0E4")
+
+fiorini_sig_trends <- fiorini_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_Tumor_sqrt > 0) |>
+  select(fibro2_score_scaled, fibro3_score_scaled, r_dist_Tumor_sqrt) |>
+  pivot_longer(c("fibro2_score_scaled", "fibro3_score_scaled"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_Tumor_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from Tumor)") + ylab("Fibroblast-specific Fibro2/3 Score") +
+  scale_color_manual(values = fibro_sig_cols) +
+  theme_bw()
+ggsave("fiorini_sig_trends.pdf", fiorini_sig_trends, width = 7, height = 5, dpi = 1200)
+
+bell_sig_trends <- bell_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_PanIN_sqrt > 0) |>
+  filter(sample_id %in% c("PanIN1132","PanIN1134","PanIN1144")) |>
+  select(fibro2_score_scaled, fibro3_score_scaled, r_dist_PanIN_sqrt) |>
+  pivot_longer(c("fibro2_score_scaled", "fibro3_score_scaled"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_PanIN_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from PanIN/Tumor)") + ylab("Fibroblast-specific Fibro2/3 Score") +
+  scale_color_manual(values = fibro_sig_cols) +
+  theme_bw()
+ggsave("bell_sig_trends.pdf", bell_sig_trends, width = 7, height = 5, dpi = 1200)
+
+
+bell_muc5ac_sig_trends <- bell_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_MUC5AC._PanIN_sqrt > 0) |>
+  filter(sample_id %in% c("PanIN1132","PanIN1134","PanIN1144")) |>
+  select(fibro2_score_scaled, fibro3_score_scaled, r_dist_MUC5AC._PanIN_sqrt) |>
+  pivot_longer(c("fibro2_score_scaled", "fibro3_score_scaled"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_MUC5AC._PanIN_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from MUC5AC+ PanIN/Tumor)") + ylab("Fibroblast-specific Fibro2/3 Score") +
+  scale_color_manual(values = fibro_sig_cols) +
+  ylim(c(0.3, 0.7)) +
+  theme_bw()
+ggsave("bell_muc5ac_sig_trends.pdf", bell_muc5ac_sig_trends + NoLegend(), width = 6, height = 5, dpi = 1200)
+
+bell_krt17_sig_trends <- bell_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_KRT17._PanIN_sqrt > 0) |>
+  filter(sample_id %in% c("PanIN1132","PanIN1134","PanIN1144")) |>
+  select(fibro2_score_scaled, fibro3_score_scaled, r_dist_KRT17._PanIN_sqrt) |>
+  pivot_longer(c("fibro2_score_scaled", "fibro3_score_scaled"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_KRT17._PanIN_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from KRT17+ PanIN/Tumor)") + ylab("Fibroblast-specific Fibro2/3 Score") +
+  scale_color_manual(values = fibro_sig_cols) +
+  theme_bw()
+ggsave("bell_krt17_sig_trends.pdf", bell_krt17_sig_trends + NoLegend(), width = 6, height = 5, dpi = 1200)
+
+bell_krt17_sig_trends_legend <- get_legend(bell_krt17_sig_trends)
+ggsave("bell_krt17_sig_trends_legend.pdf", bell_krt17_sig_trends_legend, width = 2, height = 5, dpi = 1200)
+
+
+fiorini_polarization_trends <- fiorini_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_Tumor_sqrt > 0) |>
+  select(fibro_combined_score, r_dist_Tumor_sqrt) |>
+  pivot_longer(c("fibro_combined_score"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_Tumor_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2, color = 'black') +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from Tumor)") + ylab("log(Scaled Fibro2 Sig Score / Scaled Fibro3 Sig Score)") +
+  theme_bw()
+ggsave("fiorini_polarization_trends.pdf", fiorini_polarization_trends, width = 5, height = 5, dpi = 1200)
+
+bell_muc5ac_polarization_trends <- bell_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_MUC5AC._PanIN_sqrt > 0) |>
+  filter(sample_id %in% c("PanIN1132","PanIN1134","PanIN1144")) |>
+  select(fibro_combined_score, r_dist_MUC5AC._PanIN_sqrt) |>
+  pivot_longer(c("fibro_combined_score"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_MUC5AC._PanIN_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2, color = 'black') +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from MUC5AC+ PanIN/Tumor)") + ylab("log(Scaled Fibro2 Sig Score / Scaled Fibro3 Sig Score)") +
+  theme_bw()
+ggsave("bell_muc5ac_polarization_trends.pdf", bell_muc5ac_polarization_trends, width = 5, height = 5, dpi = 1200)
+
+bell_KRT17_polarization_trends <- bell_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_KRT17._PanIN_sqrt > 0) |>
+  filter(sample_id %in% c("PanIN1132","PanIN1134","PanIN1144")) |>
+  select(fibro_combined_score, r_dist_KRT17._PanIN_sqrt) |>
+  pivot_longer(c("fibro_combined_score"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_KRT17._PanIN_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2, color = 'black') +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from KRT17+ PanIN/Tumor)") + ylab("log(Scaled Fibro2 Sig Score / Scaled Fibro3 Sig Score)") +
+  theme_bw()
+ggsave("bell_KRT17_polarization_trends.pdf", bell_KRT17_polarization_trends, width = 5, height = 5, dpi = 1200)
+
+bell_polarization_trends <- bell_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_PanIN_sqrt > 0) |>
+  filter(sample_id %in% c("PanIN1132","PanIN1134","PanIN1144")) |>
+  select(fibro_combined_score, r_dist_PanIN_sqrt) |>
+  pivot_longer(c("fibro_combined_score"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_PanIN_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2, color = 'black') +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from Tumor)") + ylab("log(Scaled Fibro2 Sig Score / Scaled Fibro3 Sig Score)") +
+  theme_bw()
+ggsave("bell_polarization_trends.pdf", bell_polarization_trends, width = 5, height = 5, dpi = 1200)
+
+# genes --------------------------------------------------------------
+
+fiorini_fibro2_sig <- c("ACTA2", "LOXL2", "COL5A2", "THBS2", "MFAP5", "INHBA")
+fiorini_fibro2_sig_cols <- scPalette(length(fiorini_fibro2_sig))
+names(fiorini_fibro2_sig_cols) <- fiorini_fibro2_sig
+fiorini_fibro2_genes_trends <- fiorini_data[[]] |> 
+  bind_cols(FetchData(fiorini_data, vars = fiorini_fibro2_sig)) |> 
+  filter(annotation == 'Fibroblasts' & r_dist_Tumor_sqrt > 0) |>
+  pivot_longer(all_of(fiorini_fibro2_sig), names_to = "Gene", values_to = "Expression") |> 
+  ggplot(aes(r_dist_Tumor_sqrt, Expression, color = Gene)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  scale_color_manual(values = fiorini_fibro2_sig_cols) +
+  xlab("sqrt(Radial Distance from Tumor)") + ylab("Fibroblasts-specific Expression") +
+  theme_bw()
+ggsave("fiorini_fibro2_genes_trends.pdf", fiorini_fibro2_genes_trends, width = 7, height = 5, dpi = 1200)
+
+fiorini_fibro3_sig <- c("CRISPLD2", "STEAP4", "CCL19", "PTN","TNC", "MYC","EDNRB","TFPI","EGFR","PTGDS","RSPO3","FBLN1","PDGFRA","DPT", "RSPO1","C7","MEDAG","MAMDC2", "OGN")
+fiorini_fibro3_sig_cols <- scPalette(length(fiorini_fibro3_sig))
+names(fiorini_fibro3_sig_cols) <- fiorini_fibro3_sig
+fiorini_fibro3_genes_trends <- fiorini_data[[]] |> 
+  bind_cols(FetchData(fiorini_data, vars = fiorini_fibro3_sig)) |> 
+  filter(annotation == 'Fibroblasts' & r_dist_Tumor_sqrt > 0) |>
+  pivot_longer(all_of(fiorini_fibro3_sig), names_to = "Gene", values_to = "Expression") |> 
+  ggplot(aes(r_dist_Tumor_sqrt, Expression, color = Gene)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  scale_color_manual(values = fiorini_fibro3_sig_cols) +
+  xlab("sqrt(Radial Distance from Tumor)") + ylab("Fibroblasts-specific Expression") +
+  theme_bw()
+ggsave("fiorini_fibro3_genes_trends.pdf", fiorini_fibro3_genes_trends, width = 7, height = 5, dpi = 1200)
+
+bell_fibro2_sig <- c("MMP11", "MFAP5", "GJB2", "CTHRC1", "INHBA", "POSTN", "FAP", "ACTA2", "MYL9", "TPM2")
+bell_fibro2_sig_cols <- scPalette(length(bell_fibro2_sig))
+names(bell_fibro2_sig_cols) <- bell_fibro2_sig
+bell_fibro2_genes_trends <- bell_data[[]] |> 
+  bind_cols(FetchData(bell_data, vars = bell_fibro2_sig)) |> 
+  filter(annotation == 'Fibroblasts' & r_dist_PanIN_sqrt > 0) |>
+  filter(sample_id %in% c("PanIN1132","PanIN1134","PanIN1144")) |>
+  pivot_longer(all_of(bell_fibro2_sig), names_to = "Gene", values_to = "Expression") |> 
+  ggplot(aes(r_dist_PanIN_sqrt, Expression, color = Gene)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  scale_color_manual(values = bell_fibro2_sig_cols) +
+  xlab("sqrt(Radial Distance from PanIN/Tumor)") + ylab("Fibroblasts-specific Expression") +
+  theme_bw()
+ggsave("bell_fibro2_genes_trends.pdf", bell_fibro2_genes_trends, width = 7, height = 5, dpi = 1200)
+
+bell_fibro3_sig <- c("CXCL12", "CCDC80", "ADH1B", "DCLK1", "HAS1", "FBLN1", "PDGFRA", "DPT", "EGFR", "PTN", "CRISPLD2", "PTGDS", "IGF1")
+bell_fibro3_sig_cols <- scPalette(length(bell_fibro3_sig))
+names(bell_fibro3_sig_cols) <- bell_fibro3_sig
+bell_fibro3_genes_trends <- bell_data[[]] |> 
+  bind_cols(FetchData(bell_data, vars = bell_fibro3_sig)) |> 
+  filter(annotation == 'Fibroblasts' & r_dist_PanIN_sqrt > 0) |>
+  filter(sample_id %in% c("PanIN1132","PanIN1134","PanIN1144")) |>
+  pivot_longer(all_of(bell_fibro3_sig), names_to = "Gene", values_to = "Expression") |> 
+  ggplot(aes(r_dist_PanIN_sqrt, Expression, color = Gene)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  scale_color_manual(values = bell_fibro3_sig_cols) +
+  xlab("sqrt(Radial Distance from PanIN/Tumor)") + ylab("Fibroblasts-specific Expression") +
+  theme_bw()
+ggsave("bell_fibro3_genes_trends.pdf", bell_fibro3_genes_trends, width = 7, height = 5, dpi = 1200)
+
+# Polygon Fibro2 Score ----------------------------------------------------
+
+library(stars)
+raster <- st_rasterize(PanIN1134_polygons)
+plot(raster["annotation3"], reset = F, axes = T)
+box()
+plot(raster["fibro2_score_scaled"], col = rev(hcl.colors(20, "RdYlBu")), add = T)
+
+PanIN1134_polygons_non_fibro <- PanIN1134_polygons[PanIN1134_polygons$annotation != 'Fibroblasts',]
+PanIN1134_fibro2_plot <- ggplot(PanIN1134_polygons) +
+  rasterise(geom_sf(aes(fill = fibro2_score_scaled), linewidth = 0), dpi = 1200) +
+  scale_fill_gradient(low = "green", high = "red") +
+  new_scale_fill() +
+  rasterise(geom_sf(data = PanIN1134_polygons_non_fibro, aes(fill = annotation2), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+ggsave("PanIN1134_fibro2_plot.pdf", PanIN1134_fibro2_plot + NoLegend(), width = 5, height = 5, dpi = 1200)
+
+PanIN1134_fibro2_plot_legend <- get_legend(PanIN1134_fibro2_plot)
+ggsave("PanIN1134_fibro2_plot_legend.pdf", PanIN1134_fibro2_plot_legend, width = 2, height = 5, dpi = 1200)
+
+PanIN1134_polygons_cropped <- st_crop(PanIN1134_polygons,
+                                      st_bbox(c(xmin = 5200, xmax = 6200, ymin = 3200, ymax = 4200)))
+# PanIN1134_polygons_cropped_non_fibro <- PanIN1134_polygons_cropped %>% filter(annotation != 'Fibroblasts')
+PanIN1134_polygons_cropped_non_fibro <- PanIN1134_polygons_cropped[PanIN1134_polygons_cropped$annotation != 'Fibroblasts',]
+PanIN1134_polygons_cropped_fibro <- PanIN1134_polygons_cropped[PanIN1134_polygons_cropped$annotation == 'Fibroblasts',]
+PanIN1134_fibro2_subplot <- ggplot(PanIN1134_polygons_cropped_fibro) +
+  geom_sf(aes(fill = fibro2_score_scaled), linewidth = 0) +
+  scale_fill_gradient(low = "green", high = "red") +
+  new_scale_fill() +
+  geom_sf(data = PanIN1134_polygons_cropped_non_fibro, aes(fill = annotation2), linewidth = 0) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw() +
+  NoLegend() +
+  theme(panel.grid = element_blank())
+ggsave("PanIN1134_fibro2_subplot.pdf", PanIN1134_fibro2_subplot, width = 5, height = 5, dpi = 1200)
+
+vr01_polygons_non_fibro <- vr01_polygons %>% dplyr::filter(annotation != 'Fibroblasts')
+vr01_fibro2_plot <- ggplot(vr01_polygons) +
+  rasterise(geom_sf(aes(fill = fibro2_score_scaled), linewidth = 0), dpi = 1200) +
+  scale_fill_gradient(low = "green", high = "red") +
+  new_scale_fill() +
+  rasterise(geom_sf(data = vr01_polygons_non_fibro, aes(fill = annotation2), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+ggsave("vr01_fibro2_plot.pdf", vr01_fibro2_plot + NoLegend(), width = 5, height = 5, dpi = 1200)
+
+vr01_fibro2_plot_legend <- get_legend(vr01_fibro2_plot)
+ggsave("vr01_fibro2_plot_legend.pdf", vr01_fibro2_plot_legend, width = 2, height = 5, dpi = 1200)
+
+vr01_polygons_cropped <- st_crop(vr01_polygons,
+                                 st_bbox(c(xmin = 1000, xmax = 2000, ymin = 500, ymax = 1500)))
+vr01_polygons_cropped_non_fibro <- vr01_polygons_cropped %>% dplyr::filter(annotation != 'Fibroblasts')
+vr01_polygons_cropped_fibro <- vr01_polygons_cropped %>% dplyr::filter(annotation == 'Fibroblasts')
+vr01_fibro2_subplot <- ggplot(vr01_polygons_cropped_fibro) +
+  geom_sf(aes(fill = fibro2_score_scaled), linewidth = 0) +
+  scale_fill_gradient(low = "green", high = "red") +
+  new_scale_fill() +
+  geom_sf(data = vr01_polygons_cropped_non_fibro, aes(fill = annotation2), linewidth = 0) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw() +
+  theme(panel.grid = element_blank())+
+  NoLegend()
+ggsave("vr01_fibro2_subplot.pdf", vr01_fibro2_subplot, width = 5, height = 5, dpi = 1200)
+
+# Polygon Fibro2/3 combined Score ----------------------------------------------------
+
+library(stars)
+raster <- st_rasterize(PanIN1134_polygons)
+plot(raster["annotation3"], reset = F, axes = T)
+box()
+plot(raster["fibro_combined_score"], col = rev(hcl.colors(20, "RdYlBu")), add = T)
+
+PanIN1134_polygons_non_fibro <- PanIN1134_polygons %>% dplyr::filter(annotation != 'Fibroblasts')
+PanIN1134_fibro23_plot <- ggplot(PanIN1134_polygons) +
+  rasterise(geom_sf(aes(fill = fibro_combined_score), linewidth = 0), dpi = 1200) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  new_scale_fill() +
+  rasterise(geom_sf(data = PanIN1134_polygons_non_fibro, aes(fill = annotation2), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw()
+ggsave("PanIN1134_fibro23_plot.pdf", PanIN1134_fibro23_plot, width = 5, height = 5, dpi = 1200)
+
+PanIN1134_polygons_cropped <- st_crop(PanIN1134_polygons,
+                                      st_bbox(c(xmin = 4800, xmax = 5800, ymin = 3500, ymax = 4500)))
+PanIN1134_polygons_cropped_non_fibro <- PanIN1134_polygons_cropped %>% filter(annotation != 'Fibroblasts')
+PanIN1134_fibro23_subplot1 <- ggplot(PanIN1134_polygons_cropped) +
+  geom_sf(aes(fill = fibro_combined_score), linewidth = 0) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  new_scale_fill() +
+  geom_sf(data = PanIN1134_polygons_cropped_non_fibro, aes(fill = annotation2), linewidth = 0) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw()
+ggsave("PanIN1134_fibro23_subplot1.pdf", PanIN1134_fibro23_subplot1, width = 5, height = 5, dpi = 1200)
+
+vr01_polygons_non_fibro <- vr01_polygons %>% dplyr::filter(annotation != 'Fibroblasts')
+vr01_fibro23_plot <- ggplot(vr01_polygons) +
+  geom_sf(aes(fill = fibro_combined_score), linewidth = 0) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  new_scale_fill() +
+  geom_sf(data = vr01_polygons_non_fibro, aes(fill = annotation2), linewidth = 0) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw()
+ggsave("vr01_fibro23_plot.pdf", vr01_fibro23_plot, width = 5, height = 5, dpi = 1200)
+
+vr01_polygons_cropped <- st_crop(vr01_polygons,
+                                 st_bbox(c(xmin = 1000, xmax = 2000, ymin = 500, ymax = 1500)))
+vr01_polygons_cropped_non_fibro <- vr01_polygons_cropped %>% dplyr::filter(annotation != 'Fibroblasts')
+vr01_fibro23_subplot <- ggplot(vr01_polygons_cropped) +
+  geom_sf(aes(fill = fibro_combined_score), linewidth = 0) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  new_scale_fill() +
+  geom_sf(data = vr01_polygons_cropped_non_fibro, aes(fill = annotation2), linewidth = 0) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw()
+ggsave("vr01_fibro23_subplot.pdf", vr01_fibro23_subplot, width = 5, height = 5, dpi = 1200)
+```

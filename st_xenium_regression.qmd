@@ -1,0 +1,99 @@
+---
+title: "Xenium Spatial Regression"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we will be calculating radial distance from tumor regions using semla [@semla] R package, then fit a spline to observe the trend of Fibro2 and Fibro3 scores (and their genes) as a function of distance from the tumor regions.
+
+## 1 Radial Distance Calculation
+
+```{r}
+xenium_samples <- qread("outputs/xenium_obj_harmony_integrated.qs")
+xenium_samples <- SplitObject(xenium_samples, split.by = 'sample_id')
+
+xenium_samples <- lapply(xenium_samples, function(x){
+  x <- UpdateSeuratForSemla(x)
+  x <- RadialDistance(
+    x,
+    column_name = "annotation",
+    selected_groups = c("Tumor"),
+    maxDist = 100
+  )
+  x$r_dist_Tumor_sqrt <- sign(x$r_dist_Tumor)*sqrt(abs(x$r_dist_Tumor))
+  
+  return(x)
+})
+```
+
+## 2 Fibro2/3 expression ~ Radial Distance
+
+```{r}
+fiorini_data[[]] |>
+  filter(annotation == 'Fibroblasts' & r_dist_Tumor_sqrt > 0) |>
+  select(fibro2_score_scaled, fibro3_score_scaled, r_dist_Tumor_sqrt) |>
+  pivot_longer(c("fibro2_score_scaled", "fibro3_score_scaled"), names_to = "Signature", values_to = "Score") |>
+  ggplot(aes(r_dist_Tumor_sqrt, Score, color = Signature)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), linewidth = 2) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("sqrt(Radial Distance from Tumor)") + ylab("Fibroblast-specific Fibro2/3 Score") +
+  scale_color_manual(values = fibro_sig_cols) +
+  theme_bw()
+```
+
+## 3 Genes Expression ~ Radial Distance
+
+```{r}
+fibro_markers <- read.csv("../Fibro Top Markers.csv", row.names = 1)
+fibro2tumor_vs_fibro3tumor <- read.csv("~/marina_turbo/Visium_Project/analysis/outputs/Fibroblasts_Analysis/stroma2_tumor_v_stroma3_Tumor.csv")
+fibro2tumor_vs_fibro3tumor %>% 
+  filter(padj < 0.05, log2FoldChange > 0.5) %>%
+  pull(X) %>%
+  intersect(rownames(xenium_samples)) -> fibro2_markers
+fibro3tumor_vs_fibro3gol <- read.csv("~/marina_turbo/Visium_Project/analysis/outputs/Fibroblasts_Analysis/stroma3_Tumor_v_stroma3_GoL.csv")
+fibro3tumor_vs_fibro3gol %>% 
+  filter(padj < 0.05, log2FoldChange > 0.5) %>%
+  pull(X) %>%
+  intersect(rownames(xenium_samples)) -> fibro3_tumor_markers
+fibro3tumor_vs_fibro3gol %>% 
+  filter(padj < 0.05, log2FoldChange < -0.5) %>%
+  pull(X) %>%
+  intersect(rownames(xenium_samples)) -> fibro3_gol_markers
+
+fibro2_genes <- c("ACTA2", "TAGLN", "INHBA", "LOXL2", "SFRP4", "WNT5A", "MFAP5")
+data <- xenium_samples[[]] |> 
+  bind_cols(FetchData(xenium_samples, vars = fibro2_genes)) |> 
+  filter(annotation == 'Fibro') |>
+  pivot_longer(all_of(fibro2_genes), names_to = "Gene", values_to = "Expression") |>
+  select(sample_id, r_dist_Tumor, Gene, Expression)
+data$sample_id <- factor(data$sample_id)
+
+fibro2_genes <- c("ACTA2", "TAGLN", "INHBA", "LOXL2", "SFRP4", "WNT5A", "MFAP5", "LRRC15")
+xenium_samples[[]] |> 
+  bind_cols(FetchData(xenium_samples, vars = fibro2_genes)) |> 
+  filter(annotation == 'Fibro') |>
+  pivot_longer(all_of(fibro2_genes), names_to = "Gene", values_to = "Expression") |> 
+  ggplot(aes(r_dist_Tumor, Expression, color = Gene)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("Radial Distance from Tumor Epithelial") + ylab("Fibroblasts-specific Expression")
+
+fibro3_genes <- c("C7", "EDNRB", "IGF1")
+xenium_samples[[]] |> 
+  bind_cols(FetchData(xenium_samples, vars = fibro3_genes)) |> 
+  filter(predicted_cellType == 'Fibroblasts') |>
+  pivot_longer(all_of(fibro3_genes), names_to = "Gene", values_to = "Expression") |> 
+  ggplot(aes(r_dist_Tumor_Epithelial, Expression, color = Gene)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+  geom_vline(aes(xintercept = 0, color = "border"), linetype = "dashed") +
+  xlab("Radial Distance from Tumor Epithelial") + ylab("Fibroblasts-specific Expression")
+```

@@ -1,0 +1,98 @@
+---
+title: "CellRanger Alignmnet"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+        code-overflow: wrap
+editor: source
+bibliography: references.bib
+execute:
+    eval: false
+---
+
+## CellRanger and Reference Genome Configuration
+
+* We aligned all the raw data using CellRanger (v7.1.0). We used the module installed on our HPC, but you can download as follows 
+
+```{bash}
+curl -o cellranger-7.1.0.tar.gz "https://cf.10xgenomics.com/releases/cell-exp/cellranger-7.1.0.tar.gz?Expires=1761892950&Key-Pair-Id=APKAI7S6A5RYOXBWRPDA&Signature=Q-tZwrJgZZlHEk3xY05gLIX~q-ZhDFa7UXGD0BpAnHZuxJQfyzMTyhwY3C6aE3ARRQfVS5XEVTlGiMQRX8~cFF7VzafPjFQPCAQD2sZjb1p4hmot0SqVRp4jCdf~ISTdr~I9pKMsjjkx3DtGSQ6htXAqKJYocn8UTz5fOHkLNCIlBeW4jykdacAFRZJVkAJAKxf0dBAned37xA9liwnx1nqFKPREbqpIdRW1e8wdSQiO4P50ODrnqMZ23q0Ylp7e7uqQoIIxD1~Nf6OcwwSg8ZLNnyZbyuMDB7CB74sad1SLyMQL9N2mMaZhg6krDsN001ATHWk4epNMOs95DONDKw__"
+```
+
+Installation instructions can be found detailed [here](https://www.10xgenomics.com/support/software/cell-ranger/latest/tutorials/cr-tutorial-in)
+
+* We used GRCh38 reference genome that can be downloaded as follows
+
+```{bash}
+# Create directory
+mkdir -p ../data/references
+refDir=../data/references
+
+# Download reference file
+curl --output ../data/references/refdata-gex-GRCh38-2020-A.tar.gz \
+https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
+
+# Uncompress zipped file
+tar -xvf ../data/references/refdata-gex-GRCh38-2020-A.tar.gz \
+-C ../data/references/
+rm ../data/references/refdata-gex-GRCh38-2020-A.tar.gz
+```
+
+## Running CellRanger
+
+The following shell script is submitted to a high-performance computing (HPC) cluster as a SLURM job array to process each of the samples in parallel.
+
+The script pulls a `cellranger_manifest.txt` file from `data` directory with at two columns: sample_id and cellranger_output path for each sample as follow
+
+|          |                                           |
+|----------|-------------------------------------------|
+| sample_1 | path/to/sample_1/fastq                   |
+| sample_2 | path/to/sample_2/fastq                   |
+| sample_3 | path/to/sample_3/fastq                   |
+
+
+```{bash}
+#!/bin/bash
+
+#SBATCH --account=
+#SBATCH --job-name='cellranger_hg38_%a'
+#SBATCH --output=logs/cellranger_hg38_%a.log
+
+#SBATCH --partition=standard
+#SBATCH --mem=128G
+#SBATCH --cpus-per-task=16
+#SBATCH --time=48:00:00
+
+#SBATCH --array=1-7
+
+mkdir -p logs
+
+# Import modules
+ml cellranger/7.1.0
+
+# Setting up variables
+samples_manifest=../data/cellranger_manifest.txt
+ref=../data/references/refdata-gex-GRCh38-2020-A
+outputDir=../outputs/alignment
+mkdir -p $outputDir
+
+# Extracting sample for the current job 
+current_sample_name=$(cat $samples_manifest | cut -f1 | sed -n ${SLURM_ARRAY_TASK_ID}p)
+current_sample_path=$(cat $samples_manifest | cut -f2 | sed -n ${SLURM_ARRAY_TASK_ID}p)
+
+echo "Analyzing Sample $current_sample_name" 
+echo -e "Fastq path $current_sample_path"
+
+# Running cellranger
+cellranger count --id=${current_sample_name} \
+--transcriptome=$ref \
+--fastqs=$current_sample_path \
+--sample=$current_sample_name \
+--localcores=16
+
+mv ${current_sample_name} $outputDir
+```

@@ -1,0 +1,22 @@
+---
+title: "Spatial Transcriptomics Acquisition"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we are will go through scRNAseq data acquisition from GEO. We will show the structure and metadata of samples.
+
+Raw sequencing data can be downloaded from the following dbGAP repositories: 
+
+Raw count matrices can be downloaded from the following GEO repositories:
+
+Processed and annotated data can be downloaded from Zenodo [here]

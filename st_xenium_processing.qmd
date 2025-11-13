@@ -1,0 +1,253 @@
+---
+title: "Xenium Data Analysis"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we will be showing how we preprocessed the external Xenium datasets we used for validation. We use [@bell] & [@fiorini] datasets. The preprocessing steps traditional scRNAseq processing and Harmony integration. The same pipeline was applied to both with differences in the clusters annotation due to differences in the gene panels used.
+
+## 1 Setup and data import
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(SeuratWrappers)
+library(reticulate)
+library(qs)
+library(spacexr)
+library(harmony)
+library(clustree)
+library(SeuratExtend)
+library(UCell)
+library(parallel)
+source("utils.R")
+
+samples_info <- read.table("data/samples_manifest.txt") %>%
+  `colnames<-`(c("sample_id", "xeniumranger_outDir", "ecDNA_state"))
+proseg_outDir <- "outputs/proseg/"
+
+# Importing samples -------------------------------------------------------
+
+xenium_samples <- lapply(samples_info$sample_id, function(x){
+  
+  xenium_obj <- ProsegToSeurat(paste0("outputs/proseg/", x))
+  xenium_obj$sample_id <- x
+  
+  rctd_res <- readRDS(paste0("outputs/RCTD/", x, "_rctd.rds"))
+  annotations.df <- rctd_res@results$results_df
+  annotations <- annotations.df$first_type
+  names(annotations) <- rownames(annotations.df)
+  xenium_obj <- AddMetaData(xenium_obj, data.frame(predicted_cellType = annotations))
+  
+  xenium_obj <- RenameCells(xenium_obj, add.cell.id = x)
+  names(xenium_obj@images) <- x
+  xenium_obj@images[[1]]@key <- x
+  
+  return(xenium_obj)
+}) %>%
+  reduce(merge)
+```
+
+## 2 Data processing and normalization
+
+It seems that VR35 has a lot of regions with non-identified cell types due to low transcriptional reads. We will remove it and remove all cells with NA predicted celltype
+
+```{r}
+# Data filteration --------------------------------------------------------
+xenium_samples <- subset(xenium_samples, subset = sample_id != "VR35")
+xenium_samples <- xenium_samples[,!is.na(xenium_samples$predicted_cellType)]
+
+# Data processing ---------------------------------------------------------
+xenium_samples <- NormalizeData(xenium_samples)
+xenium_samples <- FindVariableFeatures(xenium_samples, nfeatures = 414)
+xenium_samples <- ScaleData(xenium_samples, features = rownames(xenium_samples))
+xenium_samples <- RunPCA(xenium_samples, features = rownames(xenium_samples))
+xenium_samples <- RunUMAP(xenium_samples, dims = 1:15)
+
+# Harmony integration -----------------------------------------------------
+xenium_samples <- JoinLayers(xenium_samples)
+xenium_samples <- RunHarmony(
+  object = xenium_samples,
+  group.by.vars = "sample_id",      
+  reduction.use = "pca",      
+  dims.use = 1:20
+)
+
+xenium_samples <- RunUMAP(xenium_samples, reduction = 'harmony', dims = 1:20)
+xenium_samples <- FindNeighbors(xenium_samples, reduction = 'harmony', dims = 1:20)
+xenium_samples <- FindClusters(xenium_samples, resolution = 0.2)
+DimPlot(xenium_samples, group.by = "sample_id") + DimPlot_scCustom(xenium_samples, group.by = "predicted_cellType")
+qsave(xenium_samples, "outputs/xenium_obj_harmony_integrated.qs")
+```
+
+## 3 Cell Type Deconvolution 
+
+We will use RCTD from spaceXr [@rctd] in the `doublet` mode to estimate the cell type in each segmented cell. We will use the same scRNAseq reference that can be downloaded from Zenodo [here](). 
+
+```{r}
+ref <- qread("scRef_filtered_integrated_annotated.qs")
+ref <- subset(ref, subset = main_annotation_scvi != 'T_Cells(Hi_Ribo)')
+counts <- GetAssayData(ref, assay = "RNA", slot = "counts")
+ref$`Cell Type` <- as.character(ref$`Cell Type`)
+cluster <- as.factor(ref$`Cell Type`)
+names(cluster) <- colnames(ref)
+nUMI <- ref$nCount_RNA
+names(nUMI) <- colnames(ref)
+levels(cluster) <- gsub("/", "-", levels(cluster))
+reference <- Reference(counts, cluster, nUMI, n_max_cells = max(table(cluster)))
+rm(list = c("ref", "counts","cluster","nUMI"))
+
+slurm_jobs <- Slurm_lapply(
+  njobs = length(samples_info$sample_id),
+  job_name = "RCTD",
+  tmp_path = getwd(),
+  plan = "none",
+  sbatch_opt = list(partition = 'standard', account = '',
+                    mem = '128G', "cpus-per-task" = "16", time = "24:00:00"),
+  export = c("reference", "proseg_outDir"),
+  overwrite = TRUE,
+  X = as.list(samples_info$sample_id),
+  FUN = function(x) {
+    
+    library(spacexr)
+    
+    expected_counts_path <- file.path(proseg_outDir, paste0(x, "/expected-counts.csv.gz"))
+    expected_counts <- read.csv(expected_counts_path, header=TRUE, sep=",")
+    cell_metadata_path <- file.path(proseg_outDir, paste0(x, "/cell-metadata.csv.gz"))
+    cell_metadata <- read.csv(cell_metadata_path, header=TRUE, sep=",")
+    
+    mask <- is.finite(cell_metadata$centroid_x) &
+      is.finite(cell_metadata$centroid_y)
+    cell_metadata <- cell_metadata[mask, ]
+    expected_counts <- expected_counts[mask, ]
+    
+    coords_df <- cell_metadata[c("centroid_x", "centroid_y")]
+    names(coords_df) <- c("x", "y")
+    rownames(coords_df) <- rownames(expected_counts)
+    
+    query <- SpatialRNA(coords_df, round(t(expected_counts)))
+    RCTD <- create.RCTD(query, reference, UMI_min = 10, max_cores = parallel::detectCores())
+    RCTD <- run.RCTD(RCTD, doublet_mode = "doublet")
+    saveRDS(RCTD, paste0("outputs/RCTD/", x, "_rctd.rds"))
+  })
+
+sbatch(slurm_jobs)
+
+rctd_res <- lapply(list.files("outputs/RCTD/", pattern = "rctd.rds"), readRDS)
+rctd_res <- lapply(rctd_res, function(x){
+  annotations.df <- x@results$results_df
+  annotations <- annotations.df$first_type
+  names(annotations) <- rownames(annotations.df)
+  return(data.frame(annotations))
+}) %>%
+  bind_rows()
+
+xenium.obj <- AddMetaData(xenium.obj, rctd_res)
+```
+
+## 3 Clusters Annotation
+
+```{r}
+# Annotation --------------------------------------------------------------
+
+res <- seq(from = 0.1, to = 1, by = 0.1)
+for(x in res){
+  xenium_samples <- FindClusters(xenium_samples, resolution = x, cluster.name = paste0("res.",x))
+}
+clustree(xenium_samples, prefix = 'res.', layout = "sugiyama")
+xenium_samples <- FindClusters(xenium_samples, resolution = 0.5)
+
+seurat_clusters_markers <- FindAllMarkers(xenium_samples, assay = 'Xenium', group.by = 'seurat_clusters')
+seurat_clusters_markers$score <- seurat_clusters_markers$avg_log2FC * seurat_clusters_markers$pct.1
+xenium_samples@misc$seurat_clusters_markers <- seurat_clusters_markers
+
+## I will remove cluster 14 as it has low transcript count
+xenium_samples <- subset(xenium_samples, subset = seurat_clusters != '14')
+xenium_samples <- RunUMAP(xenium_samples, reduction = 'harmony', dims = 1:20)
+seurat_clusters_markers <- FindAllMarkers(xenium_samples, assay = 'Xenium', group.by = 'seurat_clusters')
+seurat_clusters_markers$score <- seurat_clusters_markers$avg_log2FC * seurat_clusters_markers$pct.1
+xenium_samples@misc$seurat_clusters_markers <- seurat_clusters_markers
+
+annotation <- c("0" = "Tumor",
+                "1" = "Fibro",
+                "2" = "Macrophages",
+                "3" = "Fibroblasts",
+                "4" = "Fibroblasts",
+                "5" = "T_Cells",
+                "6" = "Endothelial",
+                "7" = "Tumor",
+                "8" = "Pericytes",
+                "9" = "Endocrine",
+                "10" = "Mast_Cells",
+                "11" = "Plasma_Cells",
+                "12" = "Tumor",
+                "13" = "Tumor")
+xenium_samples <- RenameIdents(xenium_samples, annotation)
+xenium_samples$annotation <- Idents(xenium_samples)
+
+Idents(xenium_samples) <- xenium_samples$seurat_clusters
+sub_annotation <- c("0" = "Tumor1",
+                    "1" = "Fibro1",
+                    "2" = "Macrophages",
+                    "3" = "Fibro2",
+                    "4" = "Fibro3",
+                    "5" = "T_Cells",
+                    "6" = "Endothelial",
+                    "7" = "Tumor2",
+                    "8" = "Pericytes",
+                    "9" = "Endocrine",
+                    "10" = "Mast_Cells",
+                    "11" = "Plasma_Cells",
+                    "12" = "Tumor3",
+                    "13" = "CyclingTumor")
+xenium_samples <- RenameIdents(xenium_samples, sub_annotation)
+xenium_samples$sub_annotation <- Idents(xenium_samples)
+
+xenium_samples$annotation <- factor(xenium_samples$annotation, levels = c("Tumor", "Fibroblasts", "Pericytes", "Endocrine", "Endothelial",
+                                                                          "Plasma_Cells", "Mast_Cells", "Macrophages", "T_Cells"))
+Idents(xenium_samples) <- xenium_samples$annotation
+```
+
+##  4 Projecting Fibro2 and Fibro3 signature on fibroblasts of Xenium data
+```{r}
+fibro2_v_fibro2_DEGs <- read.csv("/outputs/Fibroblasts_Analysis/stroma2_v_stroma3_DEGs.csv", row.names = 1)
+
+fibro2_sig <- fibro2_v_fibro2_DEGs %>% 
+  filter(padj < 0.05 & log2FoldChange > 0.5) %>%
+  rownames() %>% 
+  intersect(rownames(xenium_samples))
+fibro2_sig <- c("ACTA2", "LOXL2", "COL5A2", "THBS2", "MFAP5", "INHBA")
+
+fibro3_sig <- fibro2_v_fibro2_DEGs %>% 
+  filter(padj < 0.05 & log1p(baseMean) > 3 & log2FoldChange < -0.5) %>%
+  rownames() %>% 
+  intersect(rownames(xenium_samples))
+fibro3_sig <- c("CRISPLD2", "STEAP4", "CCL19", "PTN","TNC", "MYC","EDNRB","TFPI","EGFR","PTGDS","RSPO3","FBLN1","PDGFRA","DPT", "RSPO1","C7","MEDAG","MAMDC2", "OGN")
+
+fibro <- subset(xenium_samples, subset = annotation == 'Fibroblasts')
+fibro <- AddModuleScore_UCell(fibro,features = list(fibro3_sig = fibro3_sig, fibro2_sig = fibro2_sig), ncores = detectCores())
+fibro@meta.data <- mutate(fibro@meta.data, 
+                          fibro2_score_scaled = (fibro2_sig_UCell - min(fibro2_sig_UCell)) / (max(fibro2_sig_UCell) - min(fibro2_sig_UCell)),
+                          fibro3_score_scaled = (fibro3_sig_UCell - min(fibro3_sig_UCell)) / (max(fibro3_sig_UCell) - min(fibro3_sig_UCell))) %>%
+  mutate(fibro_combined_score = log((fibro2_score_scaled + 1e-3) / (fibro3_score_scaled + 1e-3)))
+xenium_samples <- AddMetaData(xenium_samples, fibro@meta.data %>% select(fibro2_sig_UCell, fibro3_sig_UCell, fibro2_score_scaled, fibro3_score_scaled, fibro_combined_score))
+```
+
+## 5 Saving Object
+```{r}
+qsave(xenium_samples, "outputs/xenium_obj_harmony_integrated.qs")
+```
+
+## 6 Session Info
+```{r}
+sessionInfo()
+```

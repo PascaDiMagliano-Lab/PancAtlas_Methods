@@ -1,0 +1,63 @@
+---
+title: "Xenium Polygons Visualization"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we will be generating a `sf` object for each sample's cell polygons for visualization. We are adding fibro2/fibro3 scores and the cell type annotation as well.
+
+```{r}
+source("utils.R")
+library(qs)
+library(Seurat)
+library(tidyverse)
+library(sf)
+library(ggnewscale)
+
+xenium_samples <- qread("outputs/xenium_obj_harmony_integrated_w_fibro_scores.qs")
+xenium_samples <- SplitObject(xenium_samples, split.by = 'sample_id')
+
+# VR01 ---------------------------------------------------------------
+
+VR01_processed <- xenium_samples[[1]]
+VR01_processed <- RenameCells(VR01_processed, new.names = gsub("VR01_", "", colnames(VR01_processed)))
+VR01 <- ProsegToSeurat("outputs/proseg/VR01/")
+VR01 <- AddMetaData(VR01, metadata = VR01_processed@meta.data %>%
+                      select(annotation, fibro2_sig_UCell, fibro2_score_scaled, fibro3_sig_UCell, fibro3_score_scaled, fibro_combined_score))
+VR01_cells_geometry <- st_read("outputs/proseg/VR01/cell-polygons.geojson")
+st_geometry(VR01_cells_geometry) <- st_set_crs(st_geometry(VR01_cells_geometry), NA)
+VR01_cells_geometry$annotation <- VR01$annotation
+VR01_cells_geometry$fibro3_sig_UCell <- VR01$fibro3_sig_UCell
+VR01_cells_geometry$fibro3_score_scaled <- VR01$fibro3_score_scaled
+VR01_cells_geometry$fibro2_sig_UCell <- VR01$fibro2_sig_UCell
+VR01_cells_geometry$fibro2_score_scaled <- VR01$fibro2_score_scaled
+VR01_cells_geometry$fibro_combined_score <- VR01$fibro_combined_score
+VR01_cells_geometry <- VR01_cells_geometry %>% filter(!is.na(VR01_cells_geometry$annotation))
+VR01_cells_geometry <- mutate(VR01_cells_geometry, annotation2 = ifelse(annotation %in% c("Tumor"), as.character(annotation), "Other"))
+VR01_cells_geometry$annotation2 <- factor(VR01_cells_geometry$annotation2, levels = c("Tumor", "Other"))
+qsave(VR01_cells_geometry, "outputs/VR01_cells_geometry.qs")
+```
+
+For visualization we use 
+
+```{r}
+vr01_polygons_non_fibro <- VR01_cells_geometry %>% dplyr::filter(annotation != 'Fibroblasts')
+vr01_fibro2_plot <- ggplot(VR01_cells_geometry) +
+  rasterise(geom_sf(aes(fill = fibro2_score_scaled), linewidth = 0), dpi = 1200) +
+  scale_fill_gradient(low = "green", high = "red") +
+  new_scale_fill() +
+  rasterise(geom_sf(data = vr01_polygons_non_fibro, aes(fill = annotation2), linewidth = 0), dpi = 1200) +
+  scale_fill_manual(values = c(cols, "Other" = 'lightgrey')) +
+  labs(fill = NULL) +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+```

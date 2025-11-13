@@ -1,0 +1,227 @@
+---
+title: "LIANA+ Analysis"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+Here we will use LIANA+ [@liana] to analyze cell-cell communication in our dataset. LIANA+ uses geospatial metrics in cell-type agnostic approach to infer potential ligand-receptor interactions between spots. It only takes the expression values and spatial coordinates of the spots as input, and generates metrics for spatial correlation of their expression as a proxy for potential interactions.
+
+## 1 Setup and data import
+
+LIANA+ is a python-package, so we will use `reticulate` to interface with it with R. The exact conda environment used in this run can be installed using this [yml](envs/liana.yml) file using `conda env create -f liana.yml`. Data can be downloaded from Zenodo [here]().
+
+```{r}
+
+# Setup -------------------------------------------------------------------
+
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(tidyverse)
+  library(reticulate)
+  library(qs)
+  library(parallel)
+  library(pbapply)
+  use_condaenv("/envs/liana/")
+})
+
+sc <- import('scanpy', convert = F)
+li <- import('liana', convert = F)
+ad <- import('anndata', convert = F)
+np <- import('numpy', convert = F)
+
+merged <- qread("outputs/Spatial_Clustering/tumor_tumoradj_GoL_samples_annotated_v2_lite_new_deconv.qs")
+
+# Running LIANA on tumor samples ------------------------------------------
+
+tumor <- subset(merged, subset = tissue == 'PDAC')
+tumor <- SplitObject(tumor, split.by = 'sample_id')
+
+cl <- makeCluster(detectCores() - 1) 
+clusterEvalQ(cl, {
+  library(Seurat)
+  library(tidyverse)
+  library(reticulate)
+  library(qs)
+  library(parallel)
+  use_condaenv("/envs/liana/")
+})
+
+tumor_LR_itx <- pblapply(cl = cl, X = tumor, FUN = function(x){
+  
+  sc <- import('scanpy', convert = F)
+  li <- import('liana', convert = F)
+  ad <- import('anndata', convert = F)
+  np <- import('numpy', convert = F)
+  
+  DefaultAssay(x) <- 'Spatial'
+  adata <- ad$AnnData(
+    X = t(GetAssayData(x, assay = 'Spatial', layer = 'data')),
+    obs = x@meta.data
+  )
+  adata$var_names <- rownames(x)
+  adata$obs_names <- colnames(x)
+  adata$obsm['spatial'] <- GetTissueCoordinates(x)[,c('x','y')]
+  bandwidth <- li$ut$query_bandwidth(coordinates=adata$obsm['spatial'],
+                                     start= as.integer(0),
+                                     end= as.integer(500),
+                                     interval_n= as.integer(20)) %>% py_to_r()
+  bandwidth <- 
+    bandwidth[[2]] %>%
+    filter(neighbours == 6) %>%
+    pull(bandwith) %>%
+    min()
+  li$ut$spatial_neighbors(
+    adata,
+    bandwidth = as.integer(bandwidth),
+    cutoff = 0.1,
+    kernel = 'gaussian',
+    set_diag = TRUE
+  )
+  # li$pl$connectivity(adata, idx=as.integer(0), size=1.3)
+  lrdata = li$mt$bivariate(adata,
+                           resource_name='cellchatdb', 
+                           local_name="norm_product", 
+                           global_name="morans", 
+                           n_perms=as.integer(100), 
+                           mask_negatives=TRUE, 
+                           add_categories=TRUE, 
+                           nz_prop=0.01,
+                           use_raw=FALSE,
+                           verbose=TRUE
+  )
+  
+  ranked_itx <- lrdata$var$sort_values("morans", ascending=FALSE) %>%
+    py_to_r() %>%
+    mutate(p_adj = p.adjust(morans_pvals, method = 'BH')) %>%
+    rownames_to_column(var = 'pair') 
+  ranked_itx$sample <- unique(py_to_r(lrdata$obs['sample_id']))
+  
+  co_exp <- t(py_to_r(lrdata$X))
+  colnames(co_exp) <- py_to_r(lrdata$obs_names$to_list())
+  rownames(co_exp) <- py_to_r(lrdata$var_names$to_list())
+  
+  cats <- t(py_to_r(lrdata$layers['cats']))
+  colnames(cats) <- py_to_r(lrdata$obs_names$to_list())
+  rownames(cats) <- py_to_r(lrdata$var_names$to_list())
+  
+  return(list(ranked_itx = ranked_itx, co_exp = co_exp, cats = cats))
+})
+qsave(tumor_LR_itx, "liana_res_tumor_global_morans_local_norm_product.qs")
+
+tumor_LR_itx <- qread("liana_res_tumor_global_morans_local_norm_product.qs")
+tumor_LR_ranks <- lapply(tumor_LR_itx, function(x){x[[1]]}) %>%
+  bind_rows()
+
+tumor <- lapply(tumor, function(x){
+  x[['LRMoran']] <- CreateAssayObject(tumor_LR_itx[[unique(x$sample_id)]][[2]])
+  x[['cat']] <- CreateAssayObject(tumor_LR_itx[[unique(x$sample_id)]][[3]])
+  return(x)
+})
+tumor <- reduce(tumor, merge)
+tumor <- JoinLayers(tumor, assay = 'Spatial')
+qsave(tumor, "liana_res_mapped_tumor_global_morans_local_norm_product.qs")
+
+# Running LIANA on GoL samples ------------------------------------------
+
+gol <- subset(merged, subset = tissue == 'Healthy')
+rm(merged);gc()
+gol <- SplitObject(gol, split.by = 'sample_id')
+
+cl <- makeCluster(detectCores() - 1) 
+clusterEvalQ(cl, {
+  library(Seurat)
+  library(tidyverse)
+  library(reticulate)
+  library(qs)
+  library(parallel)
+  use_condaenv("envs/liana/")
+})
+
+GoL_LR_itx <- pblapply(cl = cl, X = gol, FUN = function(x){
+  
+  sc <- import('scanpy', convert = F)
+  li <- import('liana', convert = F)
+  ad <- import('anndata', convert = F)
+  np <- import('numpy', convert = F)
+  
+  DefaultAssay(x) <- 'Spatial'
+  adata <- ad$AnnData(
+    X = t(GetAssayData(x, assay = 'Spatial', layer = 'data')),
+    obs = x@meta.data
+  )
+  adata$var_names <- rownames(x)
+  adata$obs_names <- colnames(x)
+  adata$obsm['spatial'] <- GetTissueCoordinates(x)[,c('x','y')]
+  bandwidth <- li$ut$query_bandwidth(coordinates=adata$obsm['spatial'],
+                                     start= as.integer(0),
+                                     end= as.integer(500),
+                                     interval_n= as.integer(20)) %>% py_to_r()
+  bandwidth <- 
+    bandwidth[[2]] %>%
+    filter(neighbours == 6) %>%
+    pull(bandwith) %>%
+    min()
+  li$ut$spatial_neighbors(
+    adata,
+    bandwidth = as.integer(bandwidth),
+    cutoff = 0.1,
+    kernel = 'gaussian',
+    set_diag = TRUE
+  )
+  # li$pl$connectivity(adata, idx=as.integer(0), size=1.3)
+  lrdata = li$mt$bivariate(adata,
+                           resource_name='cellchatdb', 
+                           local_name='norm_product', 
+                           global_name="morans", 
+                           n_perms=as.integer(100), 
+                           mask_negatives=TRUE, 
+                           add_categories=TRUE, 
+                           nz_prop=0.01,
+                           use_raw=FALSE,
+                           verbose=TRUE
+  )
+  
+  ranked_itx <- lrdata$var$sort_values("morans", ascending=FALSE) %>%
+    py_to_r() %>%
+    mutate(p_adj = p.adjust(morans_pvals, method = 'BH')) %>%
+    rownames_to_column(var = 'pair') 
+  ranked_itx$sample <- unique(py_to_r(lrdata$obs['sample_id']))
+  
+  co_exp <- t(py_to_r(lrdata$X))
+  colnames(co_exp) <- py_to_r(lrdata$obs_names$to_list())
+  rownames(co_exp) <- py_to_r(lrdata$var_names$to_list())
+  
+  cats <- t(py_to_r(lrdata$layers['cats']))
+  colnames(cats) <- py_to_r(lrdata$obs_names$to_list())
+  rownames(cats) <- py_to_r(lrdata$var_names$to_list())
+  
+  return(list(ranked_itx = ranked_itx, co_exp = co_exp, cats = cats))
+})
+qsave(GoL_LR_itx, "liana_res_gol_global_morans_local_norm_product.qs")
+
+gol_LR_ranks <- lapply(GoL_LR_itx, function(x){x[[1]]}) %>%
+  bind_rows()
+
+gol <- lapply(gol, function(x){
+  x[['LRMoran']] <- CreateAssayObject(GoL_LR_itx[[unique(x$sample_id)]][[2]])
+  x[['cat']] <- CreateAssayObject(GoL_LR_itx[[unique(x$sample_id)]][[3]])
+  return(x)
+})
+
+gol <- reduce(gol, merge)
+gol <- JoinLayers(gol, assay = 'Spatial')
+qsave(gol, "liana_res_mapped_gol_global_morans_local_norm_product.qs")
+gol <-  qread("liana_res_mapped_gol_global_morans_local_norm_product.qs")
+```
+

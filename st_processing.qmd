@@ -1,0 +1,54 @@
+---
+title: "Spatial Transcriptomics Data Processing"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+## 1 Setup & Data Loading
+
+Here we load essential packages and `visium_samples_manifest.xlsx` from the data directory, that includes information and metadata about visium samples. We use Seurat v5 [@seurat] as data container for processing and visualization.
+
+```{r}
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(tidyverse)
+  library(parallel)
+  library(scCustomize)
+  library(SPATA2)
+  library(qs)
+  library(CellChat)
+})
+
+# loading manifest ------------------------------------------------------------
+
+visium_samples <- readxl::read_xlsx("../data/visium_samples_manifest.xlsx")
+
+# processing data ------------------------------------------------------------
+
+outputDir <- "outputs/Preprocessing/spatial_seurat_objects/"
+dir.create(outputDir, showWarnings = F, recursive = T)
+```
+
+## 2 Seurat Object Preparation
+
+Here we generate spatial Seurat objects for each patient sample, and save them separately. They will be merged later in [Clustering Analysis](st_clustering.qmd) with deconvolution and clustering results
+
+```{r}
+lapply(visium_samples$patient_id, function(x){
+  message(x)
+  path <- visium_samples %>% filter(patient_id == x) %>% pull(cellranger_3.0.1_output_path)
+  seurat_obj <- Load10X_Spatial(path)
+  seurat_obj <- NormalizeData(seurat_obj)
+  seurat_obj <- ScaleData(seurat_obj)
+  saveRDS(seurat_obj, paste0(outputDir, x,".rds"))
+})
+```

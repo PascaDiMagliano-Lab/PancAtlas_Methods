@@ -1,0 +1,418 @@
+---
+title: "Spatial Transcriptomics Clustering (BayesSpace)"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+editor: source
+execute:
+    eval: false
+---
+
+## 1 Setup & Data Loading
+
+* Here we load essential packages, setup input/output directories, and load `visium_samples_manifest.xlsx` from the data directory, that includes information about visium samples. We generate a `coords` dataframe that includes coordinates of all samples which will be essential for the analysis later. 
+
+* We will use BayesSpace [@BayesSpace] for the spatially-informed clustering. One can review benchmarking methods for spatially-informed clustering [@benchmarking].
+
+```{r}
+suppressPackageStartupMessages({
+  library(BayesSpace)
+  library(Seurat)
+  library(miloR)
+  library(SingleCellExperiment)
+  library(cowplot)
+  library(tidyverse)
+  library(purrr)
+  library(reticulate)
+  library(SeuratDisk)
+  library(SeuratWrappers)
+  library(slurmR)
+})
+
+inputDir <- "../outputs/Preprocessing/spatial_seurat_objects/"
+outputDir <- '../outputs/Spatial_Clustering/'
+dir.create(outputDir, showWarnings = F, recursive = T)
+
+samples_info <- readxl::read_xlsx("../data/visium_samples_manifest.xlsx")
+
+## Generate Coordinates dataframe
+coords <- lapply(samples_info$patient_id, function(x) {
+  spaceranger_path <- samples_info %>%
+    filter(patient_id == x) %>%
+    pull(cellranger_3.0.1_output_path)
+  coord_table <- read.csv(paste0(
+    spaceranger_path,
+    "spatial/tissue_positions.csv"
+  )) %>%
+    mutate(sample = x)
+  rownames(coord_table) <- paste0(coord_table$sample, "_", coord_table$barcode)
+  return(coord_table)
+}) %>%
+  bind_rows()
+```
+
+## 2 Data processing and integration
+
+Here we create a merged Seurat object for all spatial data from the individual objects created in [Spatial Data Processing](st_processing.qmd), and integrate them using `RPCA` integration.
+
+```{r}
+## Import samples and merged them
+merged <- lapply(samples_info$sample_id, function(x) {
+  seurat <- readRDS(paste0(inputDir, x, ".rds"))
+  seurat$sample_id <- x
+  seurat <- RenameCells(seurat, add.cell.id = x)
+  names(seurat@images) <- x
+  seurat@images[[x]]@key <- x
+  seurat[["percent.mt"]] <- PercentageFeatureSet(
+    object = seurat,
+    pattern = "^MT-"
+  )
+  return(seurat)
+})
+merged <- purrr::reduce(merged, merge)
+merged <- JoinLayers(merged, assay = 'Spatial')
+
+## Applying filters for QC. We will remove spots with less than 500 genes or more than 20% mitochondrial percent
+merged <- subset(merged, subset = nFeature_Spatial > 500 & percent.mt < 20)
+
+## RPCA data integration
+merged[["Spatial"]] <- split(merged[["Spatial"]], f = merged$sample_id)
+merged <- NormalizeData(merged)
+merged <- FindVariableFeatures(merged)
+merged <- ScaleData(merged)
+merged <- RunPCA(merged)
+merged <- IntegrateLayers(
+  object = merged,
+  method = RPCAIntegration,
+  new.reduction = "integrated.rpca",
+  verbose = TRUE
+)
+merged <- RunUMAP(merged, reduction = 'integrated.rpca', dims = 1:50)
+merged <- JoinLayers(merged)
+merged <- AddMetaData(merged, coord)
+```
+
+## 3 BayesSpace Clustering
+
+The workflow described below is an adapdation from the one described [here](https://github.com/edward130603/BayesSpace/issues/42). 
+
+1- BayesSpace works with `SingleCellExperiment` objects, so we need to convert our Seurat object to this format
+2- We add the coordinates information to the `colData`
+3- The object is then processed using `spatialPreprocess` function
+4- We stitch the samples together by adding 150 units shift to the coordinates to create 1 x 14 grid
+5- We used `qTune` to find the optimal number of clusters
+6- We will pick 23 clusters
+7- Then we add the cluster information back to the Seurat object
+
+```{r}
+merged_sce <- as.SingleCellExperiment(merged)
+colData(merged_sce)[, c("array_row", "array_col")] <- merged@meta.data[, c(
+  "array_row",
+  "array_col"
+)]
+colData(merged_sce)[, c("row", "col")] <- merged@meta.data[, c(
+  "array_row",
+  "array_col"
+)]
+colData(merged_sce)[, c(
+  "pxl_col_in_fullres",
+  "pxl_row_in_fullres"
+)] <- merged@meta.data[, c("pxl_col_in_fullres", "pxl_row_in_fullres")]
+merged_sce <- spatialPreprocess(
+  merged_sce,
+  platform = 'Visium',
+  n.PCs = 50,
+  BPPARAM = BiocParallel::MulticoreParam(workers = parallel::detectCores() - 1)
+)
+
+## Offsetting slides in a 1 * 14 Grid
+samples <- unique(merged_sce$sample_id)
+shift <- 150
+for (i in seq(from = 2, to = length(samples))) {
+  merged_sce$row[merged_sce$sample_id == samples[i]] =
+    merged_sce$row[merged_sce$sample_id == samples[i]] + (shift * (i - 1))
+  merged_sce$array_row[merged_sce$sample_id == samples[i]] =
+    merged_sce$array_row[merged_sce$sample_id == samples[i]] + (shift * (i - 1))
+}
+
+merged_sce <- qTune(
+  merged_sce,
+  qs = seq(2, 30),
+  use.dimred = 'INTEGRATED.rpca',
+  platform = "Visium",
+  d = 30,
+  cores = parallel::detectCores() - 2
+)
+qPlot(merged_sce)
+
+## We will pick 23
+merged_sce <- spatialCluster(
+  merged_sce,
+  q = 23,
+  platform = "Visium",
+  d = 30,
+  use.dimred = 'INTEGRATED.RPCA',
+  init.method = "mclust",
+  model = "t",
+  gamma = 2,
+  nrep = 10000,
+  burn.in = 100,
+  save.chain = TRUE
+)
+spatial_clusters <- colData(merged_sce) %>%
+  data.frame() %>%
+  select(sample_id, spatial.cluster)
+write.csv(
+  spatial_clusters,
+  file = "../outputs/Spatial_Clustering/Tumor_TumorAdj_GoL_23_spatial_clusters.csv",
+  quote = F
+)
+
+merged <- AddMetaData(merged, spatial_clusters)
+markers <- FindAllMarkers(merged, group.by = 'spatial.cluster', only.pos = T)
+markers$score <- markers$avg_log2FC * markers$pct.1
+merged@misc$markers <- markers
+```
+
+## 4 Clusters Annotation
+
+Here we use the markers and the distribution of cell type fractions from the deconvolution results and the histology to annotate the clusters as described in our manuscript [@elhossiny_manuscript]. RCTD generates two outputs, `all_weights` and `sub_weights`, where `all_weights` is the result of RCTD full-mode where all cell types are used and get a weight, whereas in `sub_weights`, the algorithm iteratively selects a subset of cell types that are likely to be on the pixel.
+
+The following code extracts the weights from the RCTD results and add them to the merged seurat object.
+
+### 4.1 Extracting RCTD Weights
+
+```{r}
+rctd_all_wts <- lapply(samples_info$sample_id, function(x) {
+  res <- readRDS(paste0("../outputs/Deconvolution/RCTD/", x, ".rds"))
+  barcodes <- colnames(res@spatialRNA@counts)
+  all_wts <- lapply(seq(1:length(barcodes)), function(x) {
+    data.frame(res@results[[x]]$all_weights) %>%
+      `colnames<-`(barcodes[[x]])
+  }) %>%
+    bind_cols()
+  all_wts <- normalize_weights(t(all_wts)) %>% t()
+  colnames(all_wts) <- paste0(x, "_", colnames(all_wts))
+  return(all_wts)
+})
+cellTypes <- rownames(rctd_all_wts[[1]])
+rctd_all_wts <- data.frame(bind_cols(rctd_all_wts))
+colnames(rctd_all_wts) <- gsub("\\.", "-", colnames(rctd_all_wts))
+rctd_all_wts <- rctd_all_wts[, colnames(merged)]
+rownames(rctd_all_wts) <- cellTypes
+merged[['RCTD_all_wts']] <- CreateAssayObject(rctd_all_wts)
+
+rctd_sub_wts <- lapply(samples_info$sample_id, function(x) {
+  res <- readRDS(paste0("../outputs/Deconvolution/RCTD/", x, ".rds"))
+  barcodes <- colnames(res@spatialRNA@counts)
+  cellTypes <- res@cell_type_info$renorm[[2]]
+  sub_wts <- lapply(seq(1:length(barcodes)), function(y) {
+    wts <- data.frame(
+      names(res@results[[y]]$conf_list),
+      res@results[[y]]$sub_weights
+    ) %>%
+      `colnames<-`(c('cellType', barcodes[[y]])) %>%
+      `rownames<-`(NULL)
+
+    remaining_ct <- setdiff(cellTypes, wts$cellType)
+    remaining_ct <- data.frame(remaining_ct, 0) %>%
+      `colnames<-`(c('cellType', barcodes[[y]]))
+
+    wts <- rbind(wts, remaining_ct) %>%
+      column_to_rownames(var = 'cellType')
+    wts <- data.frame(wts[cellTypes, ], row.names = cellTypes)
+    colnames(wts) <- barcodes[[y]]
+    return(wts)
+  }) %>%
+    bind_cols()
+  colnames(sub_wts) <- paste0(x, "_", colnames(sub_wts))
+  return(sub_wts)
+}) %>%
+  bind_cols() %>%
+  data.frame()
+colnames(rctd_sub_wts) <- gsub("\\.", "-", colnames(rctd_sub_wts))
+rctd_sub_wts <- rctd_sub_wts[, colnames(merged)]
+merged[['RCTD_sub_wts']] <- CreateAssayObject(rctd_sub_wts)
+```
+
+### 4.2 Renaming Clusters
+
+The clusters annotation are written in `BayesSpace_23_spatial_clusters_annotation.xlsx` within the `outputs/Spatial_Clustering/` directory. We merged certain clusters based on having ~1.0 pearson correlation value indicating potential over-clustering.
+
+```{r}
+annotation <- readxl::read_xlsx(
+  "../outputs/Spatial_Clustering/BayesSpace_23_spatial_clusters_annotation.xlsx"
+)
+
+## Adding main annotation
+Idents(merged) <- merged$spatial.cluster
+main_annotation <- setNames(annotation$main_annotation, annotation$cluster)
+merged <- RenameIdents(merged, main_annotation)
+merged$main_annotation <- Idents(merged)
+
+## Adding sub annotation (level2 sub clusters)
+Idents(merged) <- merged$spatial.cluster
+sub_annotation <- setNames(annotation$sub_annotation, annotation$cluster)
+merged <- RenameIdents(merged, sub_annotation)
+merged$sub_annotation <- Idents(merged)
+
+## Refactoring levels
+merged$main_annotation <- factor(
+  merged$main_annotation,
+  levels = c(
+    "Acinar1",
+    "Acinar2",
+    "Acinar3",
+    "Ducts",
+    "PanIN/GLTumor",
+    "PDTumor",
+    "Fibro1",
+    "Fibro2",
+    "Fibro3",
+    "Fibro4",
+    "Perivascular",
+    "Adipose",
+    "Endocrine",
+    "Neural",
+    "TLS",
+    "Plasma_Cells",
+    "Macrophages"
+  )
+)
+
+## Adding D1-D17 cluster annotation
+clusters <- paste0("D", seq(1:length(levels(merged$main_annotation))))
+names(clusters) <- levels(merged$main_annotation)
+Idents(merged) <- merged$main_annotation
+merged <- RenameIdents(merged, clusters)
+merged$domains <- Idents(merged)
+merged$domain_annotation <- paste0(merged$domains, ":", merged$main_annotation)
+numbers <- sub("^D([0-9]+):.*", "\\1", unique(merged$domain_annotation))
+merged$domain_annotation <- factor(
+  merged$domain_annotation,
+  levels = unique(merged$domain_annotation)[order(as.numeric(numbers))]
+)
+Idents(merged) <- merged$main_annotation
+```
+
+## 5 miloR Analysis
+
+We use miloR [@miloR] to quantify differential abundance in different spatial domains between tumor and healthy tissues.
+
+```{r}
+sce <- as.SingleCellExperiment(merged)
+sce <- sce[, sce$tissue != 'AdjNormal']
+reducedDim(sce, "UMAP") <- merged@reductions$umap@cell.embeddings[
+  colnames(sce),
+]
+reducedDim(sce, "PCA") <- merged@reductions$integrated.rpca@cell.embeddings[
+  colnames(sce),
+]
+milo <- Milo(sce)
+traj_milo <- buildGraph(milo, k = 10, d = 30, reduced.dim = "PCA")
+traj_milo <- makeNhoods(traj_milo, prop = 0.1, k = 10, d = 30, refined = TRUE)
+traj_milo <- countCells(
+  traj_milo,
+  meta.data = data.frame(colData(traj_milo)),
+  sample = "sample_id"
+)
+
+traj_design <- data.frame(colData(traj_milo))[, c("sample_id", "tissue")]
+traj_design <- distinct(traj_design)
+rownames(traj_design) <- NULL
+traj_design <- traj_design %>% column_to_rownames('sample_id')
+
+traj_milo <- calcNhoodDistance(traj_milo, d = 30, reduced.dim = 'PCA')
+
+da_results <- testNhoods(traj_milo, design = ~tissue, design.df = traj_design)
+traj_milo <- buildNhoodGraph(traj_milo)
+qsave(traj_milo, "outputs/Misc/spatial_milo.qs")
+
+da_results <- annotateNhoods(
+  traj_milo,
+  da_results,
+  coldata_col = "domain_annotation"
+)
+da_results <- da_results %>%
+  mutate(
+    category = ifelse(
+      domain_annotation %in%
+        c(
+          "D1:Acinar1",
+          "D2:Acinar2",
+          "D3:Acinar3",
+          "D4:Ducts",
+          "D5:PanIN/GLTumor",
+          "D6:PDTumor"
+        ),
+      "Epithelial Domains",
+      ifelse(
+        domain_annotation %in%
+          c(
+            "D7:Fibro1",
+            "D8:Fibro2",
+            "D9:Fibro3",
+            "D10:Fibro4",
+            "D11:Perivascular",
+            "D12:Adipose",
+            "D13:Endocrine",
+            "D14:Neural"
+          ),
+        "Non-Immune Stroma Domains",
+        "Immune Stroma Domains"
+      )
+    )
+  )
+da_results$domain_annotation <- factor(
+  da_results$domain_annotation,
+  levels = c(
+    "D1:Acinar1",
+    "D2:Acinar2",
+    "D3:Acinar3",
+    "D4:Ducts",
+    "D5:PanIN/GLTumor",
+    "D6:PDTumor",
+    "D7:Fibro1",
+    "D8:Fibro2",
+    "D9:Fibro3",
+    "D10:Fibro4",
+    "D11:Perivascular",
+    "D12:Adipose",
+    "D13:Endocrine",
+    "D14:Neural",
+    "D15:TLS",
+    "D16:Plasma_Cells",
+    "D17:Macrophages"
+  )
+)
+da_results$category <- factor(
+  da_results$category,
+  levels = c(
+    "Immune Stroma Domains",
+    "Non-Immune Stroma Domains",
+    "Epithelial Domains"
+  )
+)
+qsave(da_results, "../outputs/Spatial_Clustering/spatial_milo_da_results.qs")
+```
+
+## 6 Saving object
+
+We will save the final merged annotated object. The same object can be downloaded from Zenodo [here]()
+
+```{r}
+## Saving
+qsave(merged, "../outputs/Spatial_Clustering/spatial.qs")
+```
+
+## 7 Session Info
+
+```{r}
+#| eval: true
+sessionInfo()
+```

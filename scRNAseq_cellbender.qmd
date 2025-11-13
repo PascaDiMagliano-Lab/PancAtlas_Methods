@@ -1,0 +1,90 @@
+---
+title: "scRNAseq Ambient RNA Correction"
+author: 
+    name: "Ahmed M. Elhossiny"
+    email: "hossiny@umich.edu"
+format: 
+    html:
+        toc: true
+        toc-depth: 3
+        code-fold: show
+        code-overflow: wrap
+editor: source
+bibliography: references.bib
+execute:
+    eval: false
+---
+
+The first step in the workflow, prior to analysis in R, is to correct the raw count matrices for ambient RNA contamination. This is performed using CellBender [@cellbender]
+
+## Environment Setup
+
+The exact conda environment used in this run can be installed using this [yml](envs/cellbender.yml) file using `conda env create -f cellbender.yml`
+
+Alternatively you can create the environement as follows
+
+``` bash 
+## Installing cellbender
+conda create -n cellbender python=3.7
+conda activate cellbender
+pip install cellbender==0.3.0
+```
+
+## Running Cellbender
+
+The following shell script is submitted to a high-performance computing (HPC) cluster as a SLURM job array to process each of the 48 samples in parallel.
+
+The script pulls a `cellbender_manifest.txt` file from `data` directory with at two columns: sample_id and cellranger_output path for each sample as follow
+
+|          |                                           |
+|----------|-------------------------------------------|
+| sample_1 | path/to/sample_1/cellranger_output |
+| sample_2 | path/to/sample_2/cellranger_output |
+| sample_3 | path/to/sample_3/cellranger_output |
+
+
+```{bash}
+#!/bin/bash
+
+#SBATCH --account=
+#SBATCH --job-name='Cellbender_scRNAseq_%a'
+#SBATCH --output=logs/Cellbender_scRNAseq_%a.log
+#SBATCH --partition=gpu
+#SBATCH --mem=128G
+#SBATCH --cpus-per-task=16
+#SBATCH --gres=gpu:1
+#SBATCH --time=04:00:00
+#SBATCH --array=1-48
+
+## Setting up environment
+echo -e ">>> Start time $(date) <<<"
+start_time=$(date +%s)
+
+source activate cellbender
+outputDir=../outputs/scRNASeq_Analysis/cellbender/
+mkdir -p $outputDir
+
+## Importing samples info
+samples_info=../data/cellbender_manifest.txt
+sample=$(cat $samples_info | cut -f1 | sed -n $[SLURM_ARRAY_TASK_ID]p)
+path=$(cat $samples_info | cut -f2 | sed -n $[SLURM_ARRAY_TASK_ID]p)
+outputDir=${outputDir}/${sample}
+mkdir -p $outputDir
+echo -e ">>> Processing $sample <<<"
+echo -e ">>> Sample path $path <<<"
+echo -e ">>> Output in $outputDir <<<"
+
+## Running CellBender 
+cd $outputDir
+cellbender remove-background \
+--cuda \
+--input ${path}/raw_feature_bc_matrix.h5 \
+--output ${outputDir}/${sample}.h5
+
+## Reporting time
+echo -e ">>> End time $(date) <<<"
+end_time=$(date +%s)
+runtime_seconds=$((end_time - start_time))
+runtime_minutes=$((runtime_seconds / 60))
+echo "Total runtime: $runtime_minutes minutes"
+```
