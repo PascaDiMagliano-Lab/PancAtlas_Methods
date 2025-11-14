@@ -56,7 +56,27 @@ div.sourceCode
 @media screen {
 pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
 }
-</style>
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
 
 
 <script src="site_libs/quarto-nav/quarto-nav.js"></script>
@@ -305,7 +325,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>Here we will use LIANA+ <span class="citation" data-cites="liana">(<a href="#ref-liana" role="doc-biblioref"><strong>liana?</strong></a>)</span> to analyze cell-cell communication in our dataset. LIANA+ uses geospatial metrics in cell-type agnostic approach to infer potential ligand-receptor interactions between spots. It only takes the expression values and spatial coordinates of the spots as input, and generates metrics for spatial correlation of their expression as a proxy for potential interactions.</p>
+<p>Here we will use LIANA+ <span class="citation" data-cites="liana">(<a href="#ref-liana" role="doc-biblioref">Dimitrov et al. 2024</a>)</span> to analyze cell-cell communication in our dataset. LIANA+ uses geospatial metrics in cell-type agnostic approach to infer potential ligand-receptor interactions between spots. It only takes the expression values and spatial coordinates of the spots as input, and generates metrics for spatial correlation of their expression as a proxy for potential interactions.</p>
 <section id="setup-and-data-import" class="level2">
 <h2 class="anchored" data-anchor-id="setup-and-data-import">1 Setup and data import</h2>
 <p>LIANA+ is a python-package, so we will use <code>reticulate</code> to interface with it with R. The exact conda environment used in this run can be installed using this <a href="envs/liana.yml">yml</a> file using <code>conda env create -f liana.yml</code>. Data can be downloaded from Zenodo <a href="">here</a>.</p>
@@ -518,9 +538,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 
 
+
 </section>
 
-</main> <!-- /main -->
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="ref-liana" class="csl-entry" role="listitem">
+Dimitrov, Daniel, Philipp Sven Lars Schäfer, Elias Farr, Pablo Rodriguez-Mier, Sebastian Lobentanzer, Pau Badia-i-Mompel, Aurelien Dugourd, Jovan Tanevski, Ricardo Omar Ramirez Flores, and Julio Saez-Rodriguez. 2024. <span>“LIANA+ Provides an All-in-One Framework for Cell–Cell Communication Inference.”</span> <em>Nature Cell Biology</em> 26 (9): 1613–22.
+</div>
+</div></section></div></main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {
     const icon = "";
