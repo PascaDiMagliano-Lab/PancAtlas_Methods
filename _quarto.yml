@@ -3,7 +3,7 @@ project:
   output-dir: docs
 
 website:
-  title: "Elhossiny et al, 2025 Code"
+  title: "PanIN & PDAC Spatial Transcriptomics Paper Code"
   navbar:
     left:
       - href: index.qmd

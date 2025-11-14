@@ -28,7 +28,7 @@ Data acquisition can also be done as described in [scRNAseq Acquisition](scRNAse
 
 ## Analysis
 The analysis workflow and findings are explained in detail in [Preprint Link]()
-![](images/Fig1.Overview.jpg)
+<!-- ![](images/Fig1.Overview.jpg) -->
 
 ### scRNAseq Analysis
 
@@ -61,7 +61,7 @@ The analysis workflow and findings are explained in detail in [Preprint Link]()
 * Visualization of data is done as described here [Xenium Polygons Visualization](st_xenium_viz.qmd)
 
 ## Interactive Visualization
-You can explore the data interactively on [www.PancAtlas.com](www.PancAtlas.com)
+You can explore the data interactively on [https://pascadimagliano-lab.github.io/PancAtlas/](https://pascadimagliano-lab.github.io/PancAtlas/)
 
 ## Contact us
 
