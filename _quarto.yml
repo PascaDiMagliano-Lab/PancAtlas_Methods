@@ -3,7 +3,7 @@ project:
   output-dir: docs
 
 website:
-  title: "PanIN & PDAC Spatial Transcriptomics Paper Code"
+  title: ""
   navbar:
     left:
       - href: index.qmd
@@ -65,7 +65,7 @@ website:
           - text: "Fig 7"
             href: fig7.qmd
       - text: "Interactive Data Visualization"
-        href: https://pascadimaglianolab.shinyapps.io/PancAtlas/
+        href: https://pascadimagliano-lab.github.io/PancAtlas/
         target: _blank
 
 bibliography: references.bib

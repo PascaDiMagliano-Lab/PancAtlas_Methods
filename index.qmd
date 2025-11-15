@@ -1,5 +1,5 @@
 ---
-title: "Home"
+title: "PanIN & PDAC Spatial Transcriptomics Paper Code"
 author: 
     name: "Ahmed M. Elhossiny"
     email: "hossiny@umich.edu"

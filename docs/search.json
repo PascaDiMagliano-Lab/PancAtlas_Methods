@@ -184,49 +184,49 @@
   {
     "objectID": "index.html",
     "href": "index.html",
-    "title": "Home",
+    "title": "PanIN & PDAC Spatial Transcriptomics Paper Code",
     "section": "",
     "text": "This is documentation for the code used for analysis in Preprint Link. Here, we leverage single-cell RNAseq and spatial transcriptomics data to investigate the epithelial and stromal co-evolution in pancreatic cancer."
   },
   {
     "objectID": "index.html#introduction",
     "href": "index.html#introduction",
-    "title": "Home",
+    "title": "PanIN & PDAC Spatial Transcriptomics Paper Code",
     "section": "",
     "text": "This is documentation for the code used for analysis in Preprint Link. Here, we leverage single-cell RNAseq and spatial transcriptomics data to investigate the epithelial and stromal co-evolution in pancreatic cancer."
   },
   {
     "objectID": "index.html#data",
     "href": "index.html#data",
-    "title": "Home",
+    "title": "PanIN & PDAC Spatial Transcriptomics Paper Code",
     "section": "Data",
     "text": "Data\nWe used a cohort of scRNAseq samples composed of healthy (n = 24), Adjacent normal to tumor (n = 3) and PDAC (n = 18) samples and 10x Visium samples composed of healthy (n = 5), Adjacent normal to tumor (n = 2) and PDAC (n = 7). The samples are integrated from (Steele et al. 2020), (Carpenter et al. 2023), (Carpenter et al. 2024) and Preprint Link studies."
   },
   {
     "objectID": "index.html#downloading-raw-and-processed-data",
     "href": "index.html#downloading-raw-and-processed-data",
-    "title": "Home",
+    "title": "PanIN & PDAC Spatial Transcriptomics Paper Code",
     "section": "Downloading raw and processed data",
     "text": "Downloading raw and processed data\n\nRaw fastq data can be find in these dbGAP repositories:\nRaw count matrices can be found in these GEO repositories:\nProcessed data objects and full resolution H&E are available on Zenodo:\n\nData acquisition can also be done as described in scRNAseq Acquisition and Spatial Transcriptomics Acquisition"
   },
   {
     "objectID": "index.html#analysis",
     "href": "index.html#analysis",
-    "title": "Home",
+    "title": "PanIN & PDAC Spatial Transcriptomics Paper Code",
     "section": "Analysis",
     "text": "Analysis\nThe analysis workflow and findings are explained in detail in Preprint Link \n\nscRNAseq Analysis\n\nAlignment using CellRanger as detailed here CellRanger Alignmnet\nAmbient RNA correction using cellbender (Fleming et al. 2023) as detailed here scRNAseq Ambient RNA Correction\nQuality control, processing and integration as detailed here scRNAseq Data Processing and Integration\nCopy number variation inference was done using Numbat (Gao et al. 2023) as described here CNV Inference using Numbat\nFibroblasts and Macrophages subpopulation analysis were done as decribed here scRNAseq Fibroblast Subpopulation Analysis and Macrophages Subpopulation Analysis\nGene set scoring on TCGA-PAAD dataset was done as described here TCGA-PAAD Scoring\n\n\n\nSpatial Transcriptomics Analysis\n\nVisium\n\nAlignment using SpaceRanger was done is described here \nData normalization and seurat object generation is described here Spatial Transcriptomics Data Processing\nCell type deconvolution was done using RCTD (Cable et al. 2022) is described here Spatial Transcriptomics Cell Type Deconvolution\nIntegration and Spatially-informed clustering using BayesSpace (Zhao et al. 2021) is described here Spatial Transcriptomics Clustering (BayesSpace)\nLigand-Receptor interaction analysis was done using LIANA+ (Dimitrov et al. 2024) is described here LIANA+ Analysis\nNeighborhood analysis is described here Spatial Transcriptomics Neighborhood Analysis\nPseudobulk analysis of epithelial compartment is described here Spatial Transcriptomics Epithelial Domains Analysis\nPseudobulk analysis of stromal compartment is described here Spatial Transcriptomics Stromal Domains Analysis\n\n\n\nXenium\n\nSegmentation was done using Proseg (Jones et al. 2025) is described here Xenium Resegmentation\nData processing and integration is described here Xenium Data Analysis\nSpatial regression was done using semla (Larsson et al. 2023) is described here Xenium Spatial Regression\nVisualization of data is done as described here Xenium Polygons Visualization"
   },
   {
     "objectID": "index.html#interactive-visualization",
     "href": "index.html#interactive-visualization",
-    "title": "Home",
+    "title": "PanIN & PDAC Spatial Transcriptomics Paper Code",
     "section": "Interactive Visualization",
     "text": "Interactive Visualization\nYou can explore the data interactively on https://pascadimagliano-lab.github.io/PancAtlas/"
   },
   {
     "objectID": "index.html#contact-us",
     "href": "index.html#contact-us",
-    "title": "Home",
+    "title": "PanIN & PDAC Spatial Transcriptomics Paper Code",
     "section": "Contact us",
     "text": "Contact us\nIf you have any questions please feel free to contact the authors, Ahmed M. Elhossiny (hossiny@umich.edu) and Marina Pasca di Magliano (marinapa@umich.edu)"
   },
