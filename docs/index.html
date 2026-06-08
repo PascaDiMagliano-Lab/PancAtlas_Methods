@@ -2,14 +2,17 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.34">
+<meta name="generator" content="quarto-1.9.37">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Ahmed M. Elhossiny">
 
-<title>PanIN &amp; PDAC Spatial Transcriptomics Paper Code</title>
+<title>(Elhossiny et al, 2026, Cancer Discovery) Paper Code</title>
 <style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -25,7 +28,6 @@ ul.task-list li input[type="checkbox"] {
 div.csl-bib-body { }
 div.csl-entry {
   clear: both;
-  margin-bottom: 0em;
 }
 .hanging-indent div.csl-entry {
   margin-left:2em;
@@ -57,10 +59,10 @@ div.csl-indent {
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-c8ad9e5dbd60b7b70b38521ab19b7da4.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-c1fac2584b48ed01fb6e278e36375074.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-158031087360bce0ff56dc785ce39e06.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -271,7 +273,7 @@ div.csl-indent {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">PanIN &amp; PDAC Spatial Transcriptomics Paper Code</h1>
+<h1 class="title">(Elhossiny et al, 2026, Cancer Discovery) Paper Code</h1>
 </div>
 
 
@@ -296,24 +298,29 @@ div.csl-indent {
 
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
-<p>This is documentation for the code used for analysis in <a href="">Preprint Link</a>. Here, we leverage single-cell RNAseq and spatial transcriptomics data to investigate the epithelial and stromal co-evolution in pancreatic cancer.</p>
+<p>This is documentation for the code used for analysis in <span class="citation" data-cites="elhossiny2026asynchronous">(<a href="#ref-elhossiny2026asynchronous" role="doc-biblioref">Elhossiny et al. 2026</a>)</span>. Here, we leverage single-cell RNAseq and spatial transcriptomics data to investigate the epithelial and stromal co-evolution in pancreatic cancer.</p>
 </section>
 <section id="data" class="level2">
 <h2 class="anchored" data-anchor-id="data">Data</h2>
-<p>We used a cohort of scRNAseq samples composed of healthy (n = 24), Adjacent normal to tumor (n = 3) and PDAC (n = 18) samples and 10x Visium samples composed of healthy (n = 5), Adjacent normal to tumor (n = 2) and PDAC (n = 7). The samples are integrated from <span class="citation" data-cites="steele2020multimodal">(<a href="#ref-steele2020multimodal" role="doc-biblioref">Steele et al. 2020</a>)</span>, <span class="citation" data-cites="carpenter2023analysis">(<a href="#ref-carpenter2023analysis" role="doc-biblioref">Carpenter et al. 2023</a>)</span>, <span class="citation" data-cites="carpenter2024krt17high">(<a href="#ref-carpenter2024krt17high" role="doc-biblioref">Carpenter et al. 2024</a>)</span> and <a href=""><strong>Preprint Link</strong></a> studies.</p>
+<p>We used a cohort of scRNAseq samples composed of healthy (n = 24), Adjacent normal to tumor (n = 3) and PDAC (n = 18) samples and 10x Visium samples composed of healthy (n = 11), Adjacent normal to tumor (n = 2) and PDAC (n = 7). The samples are integrated from <span class="citation" data-cites="elhossiny2026asynchronous">(<a href="#ref-elhossiny2026asynchronous" role="doc-biblioref">Elhossiny et al. 2026</a>)</span>, <span class="citation" data-cites="carpenter2024krt17high">(<a href="#ref-carpenter2024krt17high" role="doc-biblioref"><span class="nocase">Carpenter et al.</span> 2024</a>)</span>, <span class="citation" data-cites="carpenter2023analysis">(<a href="#ref-carpenter2023analysis" role="doc-biblioref"><span class="nocase">Carpenter et al.</span> 2023</a>)</span>, <span class="citation" data-cites="steele2020multimodal">(<a href="#ref-steele2020multimodal" role="doc-biblioref"><span class="nocase">Steele et al.</span> 2020</a>)</span> studies.</p>
 </section>
 <section id="downloading-raw-and-processed-data" class="level2">
 <h2 class="anchored" data-anchor-id="downloading-raw-and-processed-data">Downloading raw and processed data</h2>
+<!-- * Raw fastq data can be find in these dbGAP repositories: -->
 <ul>
-<li>Raw fastq data can be find in these dbGAP repositories:</li>
-<li>Raw count matrices can be found in these GEO repositories:</li>
-<li>Processed data objects and full resolution H&amp;E are available on Zenodo:</li>
+<li>Raw data for spatial samples and full resolution H&amp;E are available<a href="https://zenodo.org/records/19304282">here</a><br>
+</li>
+<li>Raw data for the new scRNAseq samples can be found <a href="https://zenodo.org/records/17538974">here</a></li>
+<li>Raw data for the previous studies can be found in these GEO repositories: <a href="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE229413">GSE229413</a>, <a href="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE155698">GSE155698</a>, <a href="https://dbgap.ncbi.nlm.nih.gov/beta/study/phs003436.v1.p1">phs003436.v1.p1</a></li>
+<li>Raw data for organoids samples can be found <a href="https://zenodo.org/records/19305784">here</a></li>
+<li>Processed data objects <a href="https://zenodo.org/records/19305449">here</a></li>
 </ul>
-<p>Data acquisition can also be done as described in <a href="./scRNAseq_data_acquisiton.html">scRNAseq Acquisition</a> and <a href="st_data_acquisition.qmd">Spatial Transcriptomics Acquisition</a></p>
+<!-- Data acquisition can also be done as described in [scRNAseq Acquisition](scRNAseq_data_acquisiton.qmd) and [Spatial Transcriptomics Acquisition](st_data_acquisition.qmd) -->
 </section>
 <section id="analysis" class="level2">
 <h2 class="anchored" data-anchor-id="analysis">Analysis</h2>
-<p>The analysis workflow and findings are explained in detail in <a href="">Preprint Link</a> <!-- ![](images/Fig1.Overview.jpg) --></p>
+<p>The analysis workflow and findings are explained in detail in <span class="citation" data-cites="elhossiny2026asynchronous">(<a href="#ref-elhossiny2026asynchronous" role="doc-biblioref">Elhossiny et al. 2026</a>)</span>.</p>
+<p><img src="images/Fig1.Overview.jpg" class="img-fluid"></p>
 <section id="scrnaseq-analysis" class="level3">
 <h3 class="anchored" data-anchor-id="scrnaseq-analysis">scRNAseq Analysis</h3>
 <ul>
@@ -333,7 +340,7 @@ div.csl-indent {
 <li>Alignment using SpaceRanger was done is described here <a href="st_spaceranger.qmd"></a></li>
 <li>Data normalization and seurat object generation is described here <a href="./st_processing.html">Spatial Transcriptomics Data Processing</a></li>
 <li>Cell type deconvolution was done using RCTD <span class="citation" data-cites="rctd">(<a href="#ref-rctd" role="doc-biblioref">Cable et al. 2022</a>)</span> is described here <a href="./st_deconvolution.html">Spatial Transcriptomics Cell Type Deconvolution</a></li>
-<li>Integration and Spatially-informed clustering using BayesSpace <span class="citation" data-cites="BayesSpace">(<a href="#ref-BayesSpace" role="doc-biblioref">Zhao et al. 2021</a>)</span> is described here <a href="./st_clustering.html">Spatial Transcriptomics Clustering (BayesSpace)</a></li>
+<li>Integration and Spatially-informed clustering using BayesSpace <span class="citation" data-cites="BayesSpace">(<a href="#ref-BayesSpace" role="doc-biblioref"><span class="nocase">Zhao et al.</span> 2021</a>)</span> is described here <a href="./st_clustering.html">Spatial Transcriptomics Clustering (BayesSpace)</a></li>
 <li>Ligand-Receptor interaction analysis was done using LIANA+ <span class="citation" data-cites="liana">(<a href="#ref-liana" role="doc-biblioref">Dimitrov et al. 2024</a>)</span> is described here <a href="./st_LIANA_Analysis.html">LIANA+ Analysis</a></li>
 <li>Neighborhood analysis is described here <a href="./st_nhood_analysis.html">Spatial Transcriptomics Neighborhood Analysis</a></li>
 <li>Pseudobulk analysis of epithelial compartment is described here <a href="./st_epi_analysis.html">Spatial Transcriptomics Epithelial Domains Analysis</a></li>
@@ -347,6 +354,12 @@ div.csl-indent {
 <li>Data processing and integration is described here <a href="./st_xenium_processing.html">Xenium Data Analysis</a></li>
 <li>Spatial regression was done using semla <span class="citation" data-cites="semla">(<a href="#ref-semla" role="doc-biblioref">Larsson et al. 2023</a>)</span> is described here <a href="./st_xenium_regression.html">Xenium Spatial Regression</a></li>
 <li>Visualization of data is done as described here <a href="./st_xenium_viz.html">Xenium Polygons Visualization</a></li>
+</ul>
+</section>
+<section id="cosmx" class="level4">
+<h4 class="anchored" data-anchor-id="cosmx">CosMx</h4>
+<ul>
+<li>Projection of Fibroblasts signature on external CosMx dataset is described here <a href="st_cosmx_processing.qmd">CosMx Data Analysis</a></li>
 </ul>
 </section>
 </section>
@@ -363,24 +376,27 @@ div.csl-indent {
 
 </section>
 
-<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" role="list">
 <div id="ref-rctd" class="csl-entry" role="listitem">
-Cable, Dylan M, Evan Murray, Luli S Zou, Aleksandrina Goeva, Evan Z Macosko, Fei Chen, and Rafael A Irizarry. 2022. <span>“Robust Decomposition of Cell Type Mixtures in Spatial Transcriptomics.”</span> <em>Nature Biotechnology</em> 40 (4): 517–26.
+Cable, Dylan M, Evan Murray, Luli S Zou, et al. 2022. <span>“Robust Decomposition of Cell Type Mixtures in Spatial Transcriptomics.”</span> <em>Nature Biotechnology</em> 40 (4): 517–26.
 </div>
 <div id="ref-carpenter2023analysis" class="csl-entry" role="listitem">
-Carpenter, Eileen S, Ahmed M Elhossiny, Padma Kadiyala, Jay Li, Jake McGue, Brian D Griffith, Yaqing Zhang, et al. 2023. <span>“Analysis of Donor Pancreata Defines the Transcriptomic Signature and Microenvironment of Early Neoplastic Lesions.”</span> <em>Cancer Discovery</em> 13 (6): 1324–45.
+<span class="nocase">Carpenter, Eileen S, Ahmed M Elhossiny, Padma Kadiyala, et al.</span> 2023. <span>“Analysis of Donor Pancreata Defines the Transcriptomic Signature and Microenvironment of Early Neoplastic Lesions.”</span> <em>Cancer Discovery</em> 13 (6): 1324–45.
 </div>
 <div id="ref-carpenter2024krt17high" class="csl-entry" role="listitem">
-Carpenter, Eileen S, Padma Kadiyala, Ahmed M Elhossiny, Samantha B Kemp, Jay Li, Nina G Steele, Rémy Nicolle, et al. 2024. <span>“KRT17High/CXCL8+ Tumor Cells Display Both Classical and Basal Features and Regulate Myeloid Infiltration in the Pancreatic Cancer Microenvironment.”</span> <em>Clinical Cancer Research</em> 30 (11): 2497–2513.
+<span class="nocase">Carpenter, Eileen S, Padma Kadiyala, Ahmed M Elhossiny, et al.</span> 2024. <span>“KRT17High/CXCL8+ Tumor Cells Display Both Classical and Basal Features and Regulate Myeloid Infiltration in the Pancreatic Cancer Microenvironment.”</span> <em>Clinical Cancer Research</em> 30 (11): 2497–513.
 </div>
 <div id="ref-liana" class="csl-entry" role="listitem">
-Dimitrov, Daniel, Philipp Sven Lars Schäfer, Elias Farr, Pablo Rodriguez-Mier, Sebastian Lobentanzer, Pau Badia-i-Mompel, Aurelien Dugourd, Jovan Tanevski, Ricardo Omar Ramirez Flores, and Julio Saez-Rodriguez. 2024. <span>“LIANA+ Provides an All-in-One Framework for Cell–Cell Communication Inference.”</span> <em>Nature Cell Biology</em> 26 (9): 1613–22.
+Dimitrov, Daniel, Philipp Sven Lars Schäfer, Elias Farr, et al. 2024. <span>“LIANA+ Provides an All-in-One Framework for Cell–Cell Communication Inference.”</span> <em>Nature Cell Biology</em> 26 (9): 1613–22.
+</div>
+<div id="ref-elhossiny2026asynchronous" class="csl-entry" role="listitem">
+Elhossiny, Ahmed M, Padma Kadiyala, Jude Ogechukwu Okoye, et al. 2026. <span>“Asynchronous Evolution of Epithelium and Stroma Differentiates Precursor Lesions from Pancreatic Cancer.”</span> <em>Cancer Discovery</em>, ahead of print. <a href="https://doi.org/10.1158/2159-8290.CD-25-2001">https://doi.org/10.1158/2159-8290.CD-25-2001</a>.
 </div>
 <div id="ref-cellbender" class="csl-entry" role="listitem">
-Fleming, Stephen J, Mark D Chaffin, Alessandro Arduini, Amer-Denis Akkad, Eric Banks, John C Marioni, Anthony A Philippakis, Patrick T Ellinor, and Mehrtash Babadi. 2023. <span>“Unsupervised Removal of Systematic Background Noise from Droplet-Based Single-Cell Experiments Using CellBender.”</span> <em>Nature Methods</em> 20 (9): 1323–35.
+Fleming, Stephen J, Mark D Chaffin, Alessandro Arduini, et al. 2023. <span>“Unsupervised Removal of Systematic Background Noise from Droplet-Based Single-Cell Experiments Using CellBender.”</span> <em>Nature Methods</em> 20 (9): 1323–35.
 </div>
 <div id="ref-numbat" class="csl-entry" role="listitem">
-Gao, Teng, Ruslan Soldatov, Hirak Sarkar, Adam Kurkiewicz, Evan Biederstedt, Po-Ru Loh, and Peter V Kharchenko. 2023. <span>“Haplotype-Aware Analysis of Somatic Copy Number Variations from Single-Cell Transcriptomes.”</span> <em>Nature Biotechnology</em> 41 (3): 417–26.
+Gao, Teng, Ruslan Soldatov, Hirak Sarkar, et al. 2023. <span>“Haplotype-Aware Analysis of Somatic Copy Number Variations from Single-Cell Transcriptomes.”</span> <em>Nature Biotechnology</em> 41 (3): 417–26.
 </div>
 <div id="ref-proseg" class="csl-entry" role="listitem">
 Jones, Daniel C, Anna E Elz, Azadeh Hadadianpour, Heeju Ryu, David R Glass, and Evan W Newell. 2025. <span>“Cell Simulation as Cell Segmentation.”</span> <em>Nature Methods</em>, 1–12.
@@ -389,10 +405,10 @@ Jones, Daniel C, Anna E Elz, Azadeh Hadadianpour, Heeju Ryu, David R Glass, and 
 Larsson, Ludvig, Lovisa Franzén, Patrik L Ståhl, and Joakim Lundeberg. 2023. <span>“Semla: A Versatile Toolkit for Spatially Resolved Transcriptomics Analysis and Visualization.”</span> <em>Bioinformatics</em> 39 (10): btad626.
 </div>
 <div id="ref-steele2020multimodal" class="csl-entry" role="listitem">
-Steele, Nina G, Eileen S Carpenter, Samantha B Kemp, Veerin R Sirihorachai, Stephanie The, Lawrence Delrosario, Jenny Lazarus, et al. 2020. <span>“Multimodal Mapping of the Tumor and Peripheral Blood Immune Landscape in Human Pancreatic Cancer.”</span> <em>Nature Cancer</em> 1 (11): 1097–1112.
+<span class="nocase">Steele, Nina G, Eileen S Carpenter, Samantha B Kemp, et al.</span> 2020. <span>“Multimodal Mapping of the Tumor and Peripheral Blood Immune Landscape in Human Pancreatic Cancer.”</span> <em>Nature Cancer</em> 1 (11): 1097–112.
 </div>
 <div id="ref-BayesSpace" class="csl-entry" role="listitem">
-Zhao, Edward, Matthew R Stone, Xing Ren, Jamie Guenthoer, Kimberly S Smythe, Thomas Pulliam, Stephen R Williams, et al. 2021. <span>“Spatial Transcriptomics at Subspot Resolution with BayesSpace.”</span> <em>Nature Biotechnology</em> 39 (11): 1375–84.
+<span class="nocase">Zhao, Edward, Matthew R Stone, Xing Ren, et al.</span> 2021. <span>“Spatial Transcriptomics at Subspot Resolution with BayesSpace.”</span> <em>Nature Biotechnology</em> 39 (11): 1375–84.
 </div>
 </div></section></div></main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
@@ -446,13 +462,14 @@ Zhao, Edward, Matthew R Stone, Xing Ren, Jamie Guenthoer, Kimberly S Smythe, Tho
       e.clearSelection();
     }
     const getTextToCopy = function(trigger) {
-        const codeEl = trigger.previousElementSibling.cloneNode(true);
-        for (const childEl of codeEl.children) {
-          if (isCodeAnnotation(childEl)) {
-            childEl.remove();
-          }
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
         }
-        return codeEl.innerText;
+      }
+      return codeEl.innerText;
     }
     const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
       text: getTextToCopy

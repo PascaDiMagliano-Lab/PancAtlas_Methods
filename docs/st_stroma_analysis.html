@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.34">
+<meta name="generator" content="quarto-1.9.37">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -10,6 +10,9 @@
 
 <title>Spatial Transcriptomics Stromal Domains Analysis</title>
 <style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -60,7 +63,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 div.csl-bib-body { }
 div.csl-entry {
   clear: both;
-  margin-bottom: 0em;
 }
 .hanging-indent div.csl-entry {
   margin-left:2em;
@@ -92,10 +94,10 @@ div.csl-indent {
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-c8ad9e5dbd60b7b70b38521ab19b7da4.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-c1fac2584b48ed01fb6e278e36375074.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-158031087360bce0ff56dc785ce39e06.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -341,7 +343,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressPackageStartupMessages</span>({</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressPackageStartupMessages</span>({</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(Seurat)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(BayesPrism)</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(tidyverse)</span>
@@ -360,7 +362,7 @@ div.csl-indent {
 <span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>bp_scRef <span class="ot">&lt;-</span> <span class="fu">qread</span>(<span class="st">"outputs/Deconvolution/BayesPrism_scRef.qs"</span>)</span>
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>fibro <span class="ot">&lt;-</span> <span class="fu">qread</span>(<span class="st">"outputs/scRNAseq_Analysis/fibro_all.qs"</span>)</span>
 <span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>macs <span class="ot">&lt;-</span> <span class="fu">qread</span>(<span class="st">"outputs/scRNAseq_Analysis/macs_all.qs"</span>)</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>merged <span class="ot">&lt;-</span> qs<span class="sc">::</span><span class="fu">qread</span>(<span class="st">"outputs/Spatial_Clustering/tumor_tumoradj_GoL_samples_annotated_v2_lite_new_deconv.qs"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>merged <span class="ot">&lt;-</span> qs<span class="sc">::</span><span class="fu">qread</span>(<span class="st">"outputs/Spatial_Clustering/tumor_tumoradj_GoL_samples_annotated_v2_lite_new_deconv.qs"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -369,7 +371,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>cols <span class="ot">&lt;-</span> <span class="fu">scPalette</span>(<span class="fu">length</span>(<span class="fu">levels</span>(merged<span class="sc">$</span>main_annotation)))</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>cols <span class="ot">&lt;-</span> <span class="fu">scPalette</span>(<span class="fu">length</span>(<span class="fu">levels</span>(merged<span class="sc">$</span>main_annotation)))</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(cols) <span class="ot">&lt;-</span> <span class="fu">levels</span>(merged<span class="sc">$</span>main_annotation)</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>all_fibro <span class="ot">&lt;-</span> <span class="fu">subset</span>(merged,</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                    <span class="at">subset =</span> main_annotation <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"Fibro1"</span>, <span class="st">"Fibro2"</span>, <span class="st">"Fibro3"</span>, <span class="st">"Fibro4(Hi_Mt)"</span>))</span>
@@ -390,7 +392,7 @@ div.csl-indent {
 <span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>stroma <span class="ot">&lt;-</span> <span class="fu">subset</span>(stroma, <span class="at">subset =</span> sample_main_annotation <span class="sc">%in%</span> <span class="fu">paste0</span>(samples_keep<span class="sc">$</span>Var1,<span class="st">"_"</span>, samples_keep<span class="sc">$</span>Var2))</span>
 <span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>stroma_aggregate <span class="ot">&lt;-</span> <span class="fu">AggregateExpression</span>(stroma, <span class="at">assays =</span> <span class="st">'Spatial'</span>, <span class="at">group.by =</span> <span class="fu">c</span>(<span class="st">"main_annotation"</span>, <span class="st">"tissue"</span>, <span class="st">"sample_id"</span>), <span class="at">return.seurat =</span> T)</span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>stroma_aggregate<span class="sc">$</span>main_annotation_tissue <span class="ot">&lt;-</span> <span class="fu">paste0</span>(stroma_aggregate<span class="sc">$</span>main_annotation, <span class="st">"_"</span>, stroma_aggregate<span class="sc">$</span>tissue)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>stroma_aggregate<span class="sc">$</span>main_annotation_tissue <span class="ot">&lt;-</span> <span class="fu">paste0</span>(stroma_aggregate<span class="sc">$</span>main_annotation, <span class="st">"_"</span>, stroma_aggregate<span class="sc">$</span>tissue)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -399,7 +401,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Creating scRef ----------------------------------------------------------</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Creating scRef ----------------------------------------------------------</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">qread</span>(<span class="st">"outputs/scRNAseq_Analysis/scRef_filtered_integrated_annotated.qs"</span>)</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">subset</span>(scRef, <span class="at">subset =</span> tissue <span class="sc">!=</span> <span class="st">'AdjNormal'</span>)</span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">subset</span>(scRef, <span class="at">subset =</span> main_annotation_scvi <span class="sc">!=</span> <span class="st">'T_Cells(Hi_Rb)'</span>)</span>
@@ -414,7 +416,7 @@ div.csl-indent {
 <span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>                                <span class="at">exp.cells=</span><span class="dv">10</span>)</span>
 <span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>sc.dat.filtered.pc <span class="ot">&lt;-</span>  <span class="fu">select.gene.type</span>(sc.dat.filtered, <span class="at">gene.type =</span> <span class="st">"protein_coding"</span>)</span>
 <span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(sc.dat.filtered); <span class="fu">gc</span>()</span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">sc.dat =</span> sc.dat.filtered.pc, <span class="at">metadata =</span> metadata)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">sc.dat =</span> sc.dat.filtered.pc, <span class="at">metadata =</span> metadata)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -423,7 +425,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>ct_mtx <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">t</span>(<span class="fu">GetAssayData</span>(stroma_aggregate, <span class="at">assay =</span> <span class="st">'Spatial'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>ct_mtx <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">t</span>(<span class="fu">GetAssayData</span>(stroma_aggregate, <span class="at">assay =</span> <span class="st">'Spatial'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>intersect_genes <span class="ot">&lt;-</span> <span class="fu">intersect</span>(<span class="fu">colnames</span>(ct_mtx), <span class="fu">colnames</span>(bp_scRef<span class="sc">$</span>sc.dat))</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>myPrism <span class="ot">&lt;-</span> <span class="fu">new.prism</span>(</span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">reference=</span>bp_scRef<span class="sc">$</span>sc.dat[,intersect_genes],</span>
@@ -436,17 +438,17 @@ div.csl-indent {
 <span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>stroma_aggregate[[<span class="st">'fibroexp'</span>]] <span class="ot">&lt;-</span> <span class="fu">CreateAssayObject</span>(<span class="fu">round</span>(<span class="fu">t</span>(<span class="fu">get.exp</span>(bp_res, <span class="at">state.or.type =</span> <span class="st">'type'</span>, <span class="at">cell.name =</span> <span class="st">'Fibroblasts'</span>))))</span>
 <span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>stroma_aggregate[[<span class="st">'celltype_fractions'</span>]] <span class="ot">&lt;-</span> <span class="fu">CreateAssayObject</span>(<span class="fu">round</span>(<span class="fu">t</span>(<span class="fu">get.fraction</span>(bp_res, <span class="at">which.theta =</span> <span class="st">'final'</span>, <span class="at">state.or.type =</span> <span class="st">'type'</span>)), <span class="at">digits =</span> <span class="dv">2</span>))</span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>stroma_aggregate<span class="sc">@</span>assays<span class="sc">$</span>fibroexp<span class="sc">$</span>data <span class="ot">&lt;-</span> <span class="fu">vst</span>(<span class="fu">as.matrix</span>(<span class="fu">GetAssayData</span>(stroma_aggregate, <span class="at">assay =</span> <span class="st">'fibroexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>stroma_aggregate<span class="sc">@</span>assays<span class="sc">$</span>fibroexp<span class="sc">$</span>data <span class="ot">&lt;-</span> <span class="fu">vst</span>(<span class="fu">as.matrix</span>(<span class="fu">GetAssayData</span>(stroma_aggregate, <span class="at">assay =</span> <span class="st">'fibroexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
 <section id="pseudobulk-dge-analysis" class="level2">
 <h2 class="anchored" data-anchor-id="pseudobulk-dge-analysis">5 Pseudobulk DGE analysis</h2>
-<p>We will use DESeq2 <span class="citation" data-cites="DESeq2">(<a href="#ref-DESeq2" role="doc-biblioref">Love, Huber, and Anders 2014</a>)</span> for differential expression analysis of the fibroblast-specific expression from Fibro2 and Fibro3 spatial domains.</p>
+<p>We will use DESeq2 <span class="citation" data-cites="DESeq2">(<a href="#ref-DESeq2" role="doc-biblioref">Love et al. 2014</a>)</span> for differential expression analysis of the fibroblast-specific expression from Fibro2 and Fibro3 spatial domains.</p>
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>ct_data <span class="ot">&lt;-</span> <span class="fu">GetAssayData</span>(stroma_aggregate, <span class="at">assay =</span> <span class="st">'fibroexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>ct_data <span class="ot">&lt;-</span> <span class="fu">GetAssayData</span>(stroma_aggregate, <span class="at">assay =</span> <span class="st">'fibroexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>colData <span class="ot">&lt;-</span> stroma_aggregate<span class="sc">@</span>meta.data</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>run_id <span class="ot">&lt;-</span> samples_info <span class="sc">%&gt;%</span></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(patient_id, run_id) <span class="sc">%&gt;%</span></span>
@@ -490,7 +492,7 @@ div.csl-indent {
 <span id="cb5-42"><a href="#cb5-42" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="cn">NULL</span>,</span>
 <span id="cb5-43"><a href="#cb5-43" aria-hidden="true" tabindex="-1"></a>  <span class="co"># border = 'full',</span></span>
 <span id="cb5-44"><a href="#cb5-44" aria-hidden="true" tabindex="-1"></a>  <span class="at">axisLabSize =</span> <span class="dv">10</span></span>
-<span id="cb5-45"><a href="#cb5-45" aria-hidden="true" tabindex="-1"></a>) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb5-45"><a href="#cb5-45" aria-hidden="true" tabindex="-1"></a>) </span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -503,7 +505,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>fibro <span class="ot">&lt;-</span> <span class="fu">subset</span>(fibro, <span class="at">subset =</span> tissue <span class="sc">!=</span> <span class="st">'AdjNormal'</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>fibro <span class="ot">&lt;-</span> <span class="fu">subset</span>(fibro, <span class="at">subset =</span> tissue <span class="sc">!=</span> <span class="st">'AdjNormal'</span>)</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>metadata <span class="ot">&lt;-</span> fibro<span class="sc">@</span>meta.data</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>metadata<span class="sc">$</span>fibro_subtypes_tissue <span class="ot">&lt;-</span> <span class="fu">paste0</span>(metadata<span class="sc">$</span>fibro_subtypes, <span class="st">"_"</span>, metadata<span class="sc">$</span>tissue)</span>
 <span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>sc.dat <span class="ot">&lt;-</span> <span class="fu">t</span>(<span class="fu">GetAssayData</span>(fibro, <span class="at">assay =</span> <span class="st">'RNA'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>))</span>
@@ -513,7 +515,7 @@ div.csl-indent {
 <span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">gene.group=</span><span class="fu">c</span>( <span class="st">"Rb"</span>,<span class="st">"Mrp"</span>,<span class="st">"other_Rb"</span>,<span class="st">"chrM"</span>,<span class="st">"MALAT1"</span>,<span class="st">"chrX"</span>,<span class="st">"chrY"</span>) ,</span>
 <span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">exp.cells=</span><span class="dv">5</span>)</span>
 <span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>sc.dat.filtered.pc <span class="ot">&lt;-</span>  <span class="fu">select.gene.type</span>(sc.dat.filtered, <span class="at">gene.type =</span> <span class="st">"protein_coding"</span>)</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>fibro_scRef <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">sc.dat =</span> sc.dat.filtered.pc, <span class="at">metadata =</span> metadata)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>fibro_scRef <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">sc.dat =</span> sc.dat.filtered.pc, <span class="at">metadata =</span> metadata)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -522,7 +524,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>ct_mtx <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">t</span>(<span class="fu">GetAssayData</span>(stroma_aggregate, <span class="at">assay =</span> <span class="st">'fibroexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>ct_mtx <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">t</span>(<span class="fu">GetAssayData</span>(stroma_aggregate, <span class="at">assay =</span> <span class="st">'fibroexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>intersect_genes <span class="ot">&lt;-</span> <span class="fu">intersect</span>(<span class="fu">colnames</span>(ct_mtx), <span class="fu">colnames</span>(fibro_scRef<span class="sc">$</span>sc.dat))</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>myPrism <span class="ot">&lt;-</span> <span class="fu">new.prism</span>(</span>
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">reference=</span>fibro_scRef<span class="sc">$</span>sc.dat[,intersect_genes],</span>
@@ -536,7 +538,7 @@ div.csl-indent {
 <span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>stroma_aggregate[[<span class="st">'subtype_fractions'</span>]] <span class="ot">&lt;-</span> <span class="fu">CreateAssayObject</span>(<span class="fu">round</span>(<span class="fu">t</span>(<span class="fu">get.fraction</span>(fibro_bp_res, <span class="at">which.theta =</span> <span class="st">'final'</span>, <span class="at">state.or.type =</span> <span class="st">'type'</span>)), <span class="at">digits =</span> <span class="dv">2</span>))</span>
 <span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="fu">DefaultAssay</span>(stroma_aggregate) <span class="ot">&lt;-</span>  <span class="st">'subtype_fractions'</span></span>
-<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(stroma_aggregate, <span class="st">"outputs/Fibroblasts_Analysis/fibroblast_subtypes_deconvolution_F2F3.qs"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(stroma_aggregate, <span class="st">"outputs/Fibroblasts_Analysis/fibroblast_subtypes_deconvolution_F2F3.qs"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -545,7 +547,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>avg <span class="ot">&lt;-</span> <span class="fu">AverageExpression</span>(stroma_aggregate, <span class="at">assays =</span> <span class="st">'subtype_fractions'</span>, <span class="at">group.by =</span> <span class="st">'main_annotation_tissue'</span>)<span class="sc">$</span>subtype_fractions</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>avg <span class="ot">&lt;-</span> <span class="fu">AverageExpression</span>(stroma_aggregate, <span class="at">assays =</span> <span class="st">'subtype_fractions'</span>, <span class="at">group.by =</span> <span class="st">'main_annotation_tissue'</span>)<span class="sc">$</span>subtype_fractions</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>avg <span class="ot">&lt;-</span> avg[<span class="fu">c</span>(<span class="dv">4</span>,<span class="dv">7</span>,<span class="dv">1</span>,<span class="dv">3</span>),<span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">4</span>, <span class="dv">3</span>,<span class="dv">1</span>)]</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">pheatmap</span>(<span class="fu">as.data.frame</span>(avg), <span class="at">cluster_cols =</span> F, <span class="at">cluster_rows =</span> F, <span class="at">color =</span> <span class="fu">viridis</span>(<span class="at">n =</span> <span class="dv">100</span>, <span class="at">option =</span> <span class="st">'B'</span>, <span class="at">direction =</span> <span class="dv">1</span>), <span class="at">cellwidth =</span> <span class="dv">40</span>, <span class="at">cellheight =</span> <span class="dv">20</span>)</span>
 <span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
@@ -555,7 +557,7 @@ div.csl-indent {
 <span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>fractions <span class="ot">&lt;-</span> <span class="fu">get.fraction</span>(fibro_bp_res, <span class="at">which.theta =</span> <span class="st">'final'</span>, <span class="at">state.or.type =</span> <span class="st">'type'</span>)</span>
 <span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="fu">pheatmap</span>(<span class="fu">t</span>(fractions)[<span class="fu">c</span>(<span class="dv">4</span>,<span class="dv">7</span>,<span class="dv">1</span>,<span class="dv">3</span>),<span class="fu">order</span>(ann<span class="sc">$</span>new_annotation)], </span>
 <span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>         <span class="at">cellwidth =</span> <span class="dv">10</span>, <span class="at">cellheight =</span> <span class="dv">10</span>,</span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">cluster_cols =</span> F, <span class="at">cluster_rows =</span> F, <span class="at">show_colnames =</span> F, <span class="at">annotation_col =</span> ann, <span class="fu">viridis</span>(<span class="at">option =</span> <span class="st">'B'</span>, <span class="at">n =</span> <span class="dv">100</span>, <span class="at">direction =</span> <span class="dv">1</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">cluster_cols =</span> F, <span class="at">cluster_rows =</span> F, <span class="at">show_colnames =</span> F, <span class="at">annotation_col =</span> ann, <span class="fu">viridis</span>(<span class="at">option =</span> <span class="st">'B'</span>, <span class="at">n =</span> <span class="dv">100</span>, <span class="at">direction =</span> <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -567,7 +569,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>spatial_macs <span class="ot">&lt;-</span> <span class="fu">subset</span>(merged, <span class="at">subset =</span> main_annotation <span class="sc">==</span> <span class="st">'Macrophages'</span> <span class="sc">&amp;</span> tissue <span class="sc">==</span> <span class="st">"PDAC"</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>spatial_macs <span class="ot">&lt;-</span> <span class="fu">subset</span>(merged, <span class="at">subset =</span> main_annotation <span class="sc">==</span> <span class="st">'Macrophages'</span> <span class="sc">&amp;</span> tissue <span class="sc">==</span> <span class="st">"PDAC"</span>)</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>spatial_macs_aggregate <span class="ot">&lt;-</span> <span class="fu">AggregateExpression</span>(spatial_macs, <span class="at">assays =</span> <span class="st">'Spatial'</span>, <span class="at">group.by =</span> <span class="fu">c</span>(<span class="st">"sample_id"</span>), <span class="at">return.seurat =</span> T)</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>ct_mtx <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">t</span>(<span class="fu">GetAssayData</span>(spatial_macs_aggregate, <span class="at">assay =</span> <span class="st">'Spatial'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span>
@@ -583,7 +585,7 @@ div.csl-indent {
 <span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>spatial_macs_aggregate[[<span class="st">'macexp'</span>]] <span class="ot">&lt;-</span> <span class="fu">CreateAssayObject</span>(<span class="fu">round</span>(<span class="fu">t</span>(<span class="fu">get.exp</span>(bp_res, <span class="at">state.or.type =</span> <span class="st">'type'</span>, <span class="at">cell.name =</span> <span class="st">'Macrophages'</span>))))</span>
 <span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>spatial_macs_aggregate[[<span class="st">'celltype_fractions'</span>]] <span class="ot">&lt;-</span> <span class="fu">CreateAssayObject</span>(<span class="fu">round</span>(<span class="fu">t</span>(<span class="fu">get.fraction</span>(bp_res, <span class="at">which.theta =</span> <span class="st">'final'</span>, <span class="at">state.or.type =</span> <span class="st">'type'</span>)), <span class="at">digits =</span> <span class="dv">2</span>))</span>
-<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>spatial_macs_aggregate<span class="sc">@</span>assays<span class="sc">$</span>macexp<span class="sc">$</span>data <span class="ot">&lt;-</span> <span class="fu">vst</span>(<span class="fu">as.matrix</span>(<span class="fu">GetAssayData</span>(spatial_macs_aggregate, <span class="at">assay =</span> <span class="st">'macexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>spatial_macs_aggregate<span class="sc">@</span>assays<span class="sc">$</span>macexp<span class="sc">$</span>data <span class="ot">&lt;-</span> <span class="fu">vst</span>(<span class="fu">as.matrix</span>(<span class="fu">GetAssayData</span>(spatial_macs_aggregate, <span class="at">assay =</span> <span class="st">'macexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -594,7 +596,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>macs <span class="ot">&lt;-</span> <span class="fu">subset</span>(macs, <span class="at">subset =</span> tissue <span class="sc">!=</span> <span class="st">'AdjNormal'</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>macs <span class="ot">&lt;-</span> <span class="fu">subset</span>(macs, <span class="at">subset =</span> tissue <span class="sc">!=</span> <span class="st">'AdjNormal'</span>)</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>metadata <span class="ot">&lt;-</span> macs<span class="sc">@</span>meta.data</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>metadata<span class="sc">$</span>macs_subtypes_tissue <span class="ot">&lt;-</span> <span class="fu">paste0</span>(metadata<span class="sc">$</span>macs_subtypes, <span class="st">"_"</span>, metadata<span class="sc">$</span>tissue)</span>
 <span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>sc.dat <span class="ot">&lt;-</span> <span class="fu">t</span>(<span class="fu">GetAssayData</span>(macs, <span class="at">assay =</span> <span class="st">'RNA'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>))</span>
@@ -604,7 +606,7 @@ div.csl-indent {
 <span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">gene.group=</span><span class="fu">c</span>( <span class="st">"Rb"</span>,<span class="st">"Mrp"</span>,<span class="st">"other_Rb"</span>,<span class="st">"chrM"</span>,<span class="st">"MALAT1"</span>,<span class="st">"chrX"</span>,<span class="st">"chrY"</span>) ,</span>
 <span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">exp.cells=</span><span class="dv">5</span>)</span>
 <span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>sc.dat.filtered.pc <span class="ot">&lt;-</span>  <span class="fu">select.gene.type</span>(sc.dat.filtered, <span class="at">gene.type =</span> <span class="st">"protein_coding"</span>)</span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>macs_scRef <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">sc.dat =</span> sc.dat.filtered.pc, <span class="at">metadata =</span> metadata)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>macs_scRef <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">sc.dat =</span> sc.dat.filtered.pc, <span class="at">metadata =</span> metadata)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -613,7 +615,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>ct_mtx <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">t</span>(<span class="fu">GetAssayData</span>(spatial_macs_aggregate, <span class="at">assay =</span> <span class="st">'macexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>ct_mtx <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">t</span>(<span class="fu">GetAssayData</span>(spatial_macs_aggregate, <span class="at">assay =</span> <span class="st">'macexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)))</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>intersect_genes <span class="ot">&lt;-</span> <span class="fu">intersect</span>(<span class="fu">colnames</span>(ct_mtx), <span class="fu">colnames</span>(macs_scRef<span class="sc">$</span>sc.dat))</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>myPrism <span class="ot">&lt;-</span> <span class="fu">new.prism</span>(</span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">reference=</span>macs_scRef<span class="sc">$</span>sc.dat[,intersect_genes],</span>
@@ -622,7 +624,7 @@ div.csl-indent {
 <span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">cell.type.labels =</span> macs_scRef<span class="sc">$</span>metadata<span class="sc">$</span>macs_subtypes,</span>
 <span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">cell.state.labels =</span> macs_scRef<span class="sc">$</span>metadata<span class="sc">$</span>macs_subtypes_tissue,</span>
 <span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">key =</span> <span class="cn">NULL</span>)</span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>macs_bp_res <span class="ot">&lt;-</span> <span class="fu">run.prism</span>(myPrism, <span class="at">n.cores =</span> parallel<span class="sc">::</span><span class="fu">detectCores</span>() <span class="sc">-</span> <span class="dv">1</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>macs_bp_res <span class="ot">&lt;-</span> <span class="fu">run.prism</span>(myPrism, <span class="at">n.cores =</span> parallel<span class="sc">::</span><span class="fu">detectCores</span>() <span class="sc">-</span> <span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -631,7 +633,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>spatial_macs_aggregate[[<span class="st">'subtype_fractions'</span>]] <span class="ot">&lt;-</span> <span class="fu">CreateAssayObject</span>(<span class="fu">round</span>(<span class="fu">t</span>(<span class="fu">get.fraction</span>(macs_bp_res, <span class="at">which.theta =</span> <span class="st">'final'</span>, <span class="at">state.or.type =</span> <span class="st">'type'</span>)), <span class="at">digits =</span> <span class="dv">2</span>))</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>spatial_macs_aggregate[[<span class="st">'subtype_fractions'</span>]] <span class="ot">&lt;-</span> <span class="fu">CreateAssayObject</span>(<span class="fu">round</span>(<span class="fu">t</span>(<span class="fu">get.fraction</span>(macs_bp_res, <span class="at">which.theta =</span> <span class="st">'final'</span>, <span class="at">state.or.type =</span> <span class="st">'type'</span>)), <span class="at">digits =</span> <span class="dv">2</span>))</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">DefaultAssay</span>(spatial_macs_aggregate) <span class="ot">&lt;-</span>  <span class="st">'subtype_fractions'</span></span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(spatial_macs_aggregate, <span class="st">"outputs/Macs_Analysis/macs_subtypes_deconvolution.qs"</span>)</span>
 <span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
@@ -644,7 +646,7 @@ div.csl-indent {
 <span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
 <span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_reordered</span>() <span class="sc">+</span></span>
 <span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Macrophage Subtype"</span>, <span class="at">y =</span> <span class="st">"Fraction"</span>, <span class="at">title =</span> <span class="st">"Macrophage Subtype Fractions in Spatial Domains"</span>) <span class="sc">+</span></span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 
@@ -654,7 +656,7 @@ div.csl-indent {
 </section>
 </section>
 
-<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" role="list">
 <div id="ref-bayesprism" class="csl-entry" role="listitem">
 Chu, Tinyi, Zhong Wang, Dana Pe’er, and Charles G Danko. 2022. <span>“Cell Type and Gene Expression Deconvolution with BayesPrism Enables Bayesian Integrative Analysis Across Bulk and Single-Cell RNA Sequencing in Oncology.”</span> <em>Nature Cancer</em> 3 (4): 505–17.
 </div>
@@ -713,13 +715,14 @@ Love, Michael I, Wolfgang Huber, and Simon Anders. 2014. <span>“Moderated Esti
       e.clearSelection();
     }
     const getTextToCopy = function(trigger) {
-        const codeEl = trigger.previousElementSibling.cloneNode(true);
-        for (const childEl of codeEl.children) {
-          if (isCodeAnnotation(childEl)) {
-            childEl.remove();
-          }
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
         }
-        return codeEl.innerText;
+      }
+      return codeEl.innerText;
     }
     const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
       text: getTextToCopy

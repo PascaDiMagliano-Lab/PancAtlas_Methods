@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.34">
+<meta name="generator" content="quarto-1.9.37">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -10,6 +10,9 @@
 
 <title>Spatial Transcriptomics Epithelial Domains Analysis</title>
 <style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -60,7 +63,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 div.csl-bib-body { }
 div.csl-entry {
   clear: both;
-  margin-bottom: 0em;
 }
 .hanging-indent div.csl-entry {
   margin-left:2em;
@@ -92,10 +94,10 @@ div.csl-indent {
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-c8ad9e5dbd60b7b70b38521ab19b7da4.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-c1fac2584b48ed01fb6e278e36375074.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-158031087360bce0ff56dc785ce39e06.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -343,7 +345,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressPackageStartupMessages</span>({</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressPackageStartupMessages</span>({</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(Seurat)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(BayesPrism)</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(tidyverse)</span>
@@ -371,7 +373,7 @@ div.csl-indent {
 <span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">qread</span>(<span class="st">"../outputs/scRNAseq_Analysis/scRef.qs"</span>)</span>
 <span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>spatial <span class="ot">&lt;-</span> <span class="fu">qread</span>(<span class="st">"../outputs/Spatial_Clustering/spatial.qs"</span>)</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>samples_info <span class="ot">&lt;-</span> readxl<span class="sc">::</span><span class="fu">read_xlsx</span>(<span class="st">"../data/visium_samples_manifest.xlsx"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>samples_info <span class="ot">&lt;-</span> readxl<span class="sc">::</span><span class="fu">read_xlsx</span>(<span class="st">"../data/visium_samples_manifest.xlsx"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -381,7 +383,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>all_epi <span class="ot">&lt;-</span> <span class="fu">subset</span>(</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>all_epi <span class="ot">&lt;-</span> <span class="fu">subset</span>(</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  spatial,</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">subset =</span> main_annotation <span class="sc">%in%</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="st">'Acinar1'</span>, <span class="st">'Acinar2'</span>, <span class="st">'Acinar3'</span>, <span class="st">'Ducts'</span>, <span class="st">'PanIN/GLTumor'</span>, <span class="st">'PDTumor'</span>)</span>
@@ -425,7 +427,7 @@ div.csl-indent {
 <span id="cb2-42"><a href="#cb2-42" aria-hidden="true" tabindex="-1"></a>  epi<span class="sc">$</span>new_annotation,</span>
 <span id="cb2-43"><a href="#cb2-43" aria-hidden="true" tabindex="-1"></a>  <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Donor_PanIN"</span>, <span class="st">"TumorAdj_PanIN"</span>, <span class="st">"GLTumor"</span>, <span class="st">"PDTumor"</span>)</span>
 <span id="cb2-44"><a href="#cb2-44" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(epi, <span class="st">"outputs/Epithelial_Analysis/epi.qs"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(epi, <span class="st">"outputs/Epithelial_Analysis/epi.qs"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -438,13 +440,13 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">use_condaenv</span>(<span class="st">"path/to/conda/envs/cellrank/"</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">use_condaenv</span>(<span class="st">"path/to/conda/envs/cellrank/"</span>)</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>ad <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">"anndata"</span>, <span class="at">convert =</span> T)</span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>scipy <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">"scipy"</span>, <span class="at">convert =</span> T)</span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>sc <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">'scanpy'</span>, <span class="at">convert =</span> T)</span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>pd <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">'pandas'</span>, <span class="at">convert =</span> T)</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>pl <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">'palantir'</span>, <span class="at">convert =</span> F)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>pl <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">'palantir'</span>, <span class="at">convert =</span> F)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -454,7 +456,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>adata <span class="ot">&lt;-</span> ad<span class="sc">$</span><span class="fu">AnnData</span>(</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>adata <span class="ot">&lt;-</span> ad<span class="sc">$</span><span class="fu">AnnData</span>(</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">X =</span> scipy<span class="sc">$</span>sparse<span class="sc">$</span><span class="fu">csr_matrix</span>(</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    Matrix<span class="sc">::</span><span class="fu">t</span>(<span class="fu">LayerData</span>(epi, <span class="at">assay =</span> <span class="st">'Spatial'</span>, <span class="at">layer =</span> <span class="st">'data'</span>))</span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  ),</span>
@@ -462,17 +464,17 @@ div.csl-indent {
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>adata<span class="sc">$</span>obs_names <span class="ot">&lt;-</span> <span class="fu">colnames</span>(epi)</span>
 <span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>adata<span class="sc">$</span>var_names <span class="ot">&lt;-</span> <span class="fu">rownames</span>(epi)</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>adata<span class="sc">$</span>obsm<span class="sc">$</span>X_integrated.rpca <span class="ot">&lt;-</span> epi<span class="sc">@</span>reductions<span class="sc">$</span>integrated.rpca<span class="sc">@</span>cell.embeddings</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>adata<span class="sc">$</span>obsm<span class="sc">$</span>X_integrated.rpca <span class="ot">&lt;-</span> epi<span class="sc">@</span>reductions<span class="sc">$</span>integrated.rpca<span class="sc">@</span>cell.embeddings</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
 <section id="run-palantir" class="level3">
 <h3 class="anchored" data-anchor-id="run-palantir">3.3 Run Palantir</h3>
-<p>We will run palantir on the AnnData object, we will choose a cell from Donor PanINs as a root node. We use Monocle3 <span class="citation" data-cites="monocle3">(<a href="#ref-monocle3" role="doc-biblioref">Cao et al. 2019</a>)</span> to interactively choose a cell and determine the cell name for the <code>start_cell</code> argument in Palantir. We then add the pseudotime results to the original Seurat object.</p>
+<p>We will run palantir on the AnnData object, we will choose a cell from Donor PanINs as a root node. We use Monocle3 <span class="citation" data-cites="monocle3">(<a href="#ref-monocle3" role="doc-biblioref"><span class="nocase">Cao et al.</span> 2019</a>)</span> to interactively choose a cell and determine the cell name for the <code>start_cell</code> argument in Palantir. We then add the pseudotime results to the original Seurat object.</p>
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="do">## Palantir Preprocessing</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="do">## Palantir Preprocessing</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>sc<span class="sc">$</span>pp<span class="sc">$</span><span class="fu">neighbors</span>(adata, <span class="at">use_rep =</span> <span class="st">'X_integrated.rpca'</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>pl<span class="sc">$</span>utils<span class="sc">$</span><span class="fu">run_diffusion_maps</span>(</span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  adata,</span>
@@ -507,7 +509,7 @@ div.csl-indent {
 <span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a><span class="fu">FeaturePlot</span>(epi, <span class="at">features =</span> <span class="st">'palantir_pseudotime'</span>) <span class="sc">+</span></span>
 <span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_viridis_c</span>() <span class="sc">+</span></span>
 <span id="cb5-35"><a href="#cb5-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggtitle</span>(<span class="st">"Estimated Pseudotime"</span>)</span>
-<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(epi, <span class="st">"outputs/Epithelial_Analysis/epi_w_palantir_pseudotime.qs"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(epi, <span class="st">"outputs/Epithelial_Analysis/epi_w_palantir_pseudotime.qs"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -517,7 +519,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Gene trends clustering</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Gene trends clustering</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>gene_trends <span class="ot">&lt;-</span> adata<span class="sc">$</span>varm[[<span class="st">'gene_trends_SU-21-2784_B15_GGTTACGTCAAGCAGG-1'</span>]]</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>pseudotime_vec <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(<span class="fu">colnames</span>(gene_trends))</span>
 <span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(gene_trends) <span class="ot">&lt;-</span> <span class="fu">rownames</span>(epi)</span>
@@ -654,7 +656,7 @@ div.csl-indent {
 <span id="cb6-135"><a href="#cb6-135" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
 <span id="cb6-136"><a href="#cb6-136" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">data =</span> exp_trend, <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> pseudotime, <span class="at">y =</span> expression))</span>
 <span id="cb6-137"><a href="#cb6-137" aria-hidden="true" tabindex="-1"></a><span class="co"># theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +</span></span>
-<span id="cb6-138"><a href="#cb6-138" aria-hidden="true" tabindex="-1"></a><span class="co"># geom_jitter(data = exp, height = 0.5, size = 0.5, mapping = aes(x = pseudotime, y = exp, color = cellType))</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb6-138"><a href="#cb6-138" aria-hidden="true" tabindex="-1"></a><span class="co"># geom_jitter(data = exp, height = 0.5, size = 0.5, mapping = aes(x = pseudotime, y = exp, color = cellType))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -668,7 +670,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">subset</span>(scRef, <span class="at">subset =</span> tissue <span class="sc">!=</span> <span class="st">'AdjNormal'</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">subset</span>(scRef, <span class="at">subset =</span> tissue <span class="sc">!=</span> <span class="st">'AdjNormal'</span>)</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">subset</span>(scRef, <span class="at">subset =</span> main_annotation_scvi <span class="sc">!=</span> <span class="st">'T_Cells(Hi_Rb)'</span>)</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>scRef<span class="sc">$</span>main_annotation_scvi_tissue <span class="ot">&lt;-</span> <span class="fu">paste0</span>(</span>
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  scRef<span class="sc">$</span>main_annotation_scvi,</span>
@@ -693,7 +695,7 @@ div.csl-indent {
 <span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(sc.dat.filtered)</span>
 <span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a><span class="fu">gc</span>()</span>
-<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">sc.dat =</span> sc.dat.filtered.pc, <span class="at">metadata =</span> metadata)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>scRef <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">sc.dat =</span> sc.dat.filtered.pc, <span class="at">metadata =</span> metadata)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -703,7 +705,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="do">## Generating Pseudobulk profile</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="do">## Generating Pseudobulk profile</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>epi_aggregate <span class="ot">&lt;-</span> <span class="fu">AggregateExpression</span>(</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  epi,</span>
 <span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">group.by =</span> <span class="fu">c</span>(<span class="st">"sample_id"</span>, <span class="st">"tissue"</span>, <span class="st">"new_annotation"</span>),</span>
@@ -753,17 +755,17 @@ div.csl-indent {
 <span id="cb8-48"><a href="#cb8-48" aria-hidden="true" tabindex="-1"></a>  <span class="at">assay =</span> <span class="st">'epiexp'</span>,</span>
 <span id="cb8-49"><a href="#cb8-49" aria-hidden="true" tabindex="-1"></a>  <span class="at">layer =</span> <span class="st">'counts'</span></span>
 <span id="cb8-50"><a href="#cb8-50" aria-hidden="true" tabindex="-1"></a>)))</span>
-<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(epi_aggregate, <span class="st">"outputs/Epithelial_Analysis/epi_aggregate.qs"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(epi_aggregate, <span class="st">"outputs/Epithelial_Analysis/epi_aggregate.qs"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
 <section id="differential-gene-expression-analysis-for-the-epithelial-specific-expression" class="level3">
 <h3 class="anchored" data-anchor-id="differential-gene-expression-analysis-for-the-epithelial-specific-expression">4.3 Differential Gene Expression Analysis for the epithelial-specific expression</h3>
-<p>We will use DESeq2 <span class="citation" data-cites="DESeq2">(<a href="#ref-DESeq2" role="doc-biblioref">Love, Huber, and Anders 2014</a>)</span> for differential gene expression analysis using the extracted epithelial-specific expression matrix.</p>
+<p>We will use DESeq2 <span class="citation" data-cites="DESeq2">(<a href="#ref-DESeq2" role="doc-biblioref">Love et al. 2014</a>)</span> for differential gene expression analysis using the extracted epithelial-specific expression matrix.</p>
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="do">## DESeq2 Setup</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="do">## DESeq2 Setup</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>ct_data <span class="ot">&lt;-</span> <span class="fu">GetAssayData</span>(epi_aggregate, <span class="at">assay =</span> <span class="st">'epiexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>colData <span class="ot">&lt;-</span> epi_aggregate<span class="sc">@</span>meta.data</span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>run_id <span class="ot">&lt;-</span> samples_info <span class="sc">%&gt;%</span></span>
@@ -804,7 +806,7 @@ div.csl-indent {
 <span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> <span class="sc">~</span> run_id <span class="sc">+</span> new_annotation</span>
 <span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a>dds <span class="ot">&lt;-</span> <span class="fu">DESeq</span>(dds)</span>
-<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(dds, <span class="st">"outputs/Epithelial_Analysis/epi_deseq_object.qs"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(dds, <span class="st">"outputs/Epithelial_Analysis/epi_deseq_object.qs"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -815,7 +817,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>TumorPanIN_v_GoL_PanIN <span class="ot">&lt;-</span> <span class="fu">lfcShrink</span>(</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>TumorPanIN_v_GoL_PanIN <span class="ot">&lt;-</span> <span class="fu">lfcShrink</span>(</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  dds,</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">coef =</span> <span class="st">'new_annotation_Tumor_PanIN.GLTumor_vs_Donor_PanIN'</span>,</span>
 <span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type =</span> <span class="st">'ashr'</span></span>
@@ -841,7 +843,7 @@ div.csl-indent {
 <span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="cn">NULL</span>,</span>
 <span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>  <span class="co"># border = 'full',</span></span>
 <span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">axisLabSize =</span> <span class="dv">10</span></span>
-<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -850,7 +852,7 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>tumor_epi_aggregate <span class="ot">&lt;-</span> epi_aggregate[,</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>tumor_epi_aggregate <span class="ot">&lt;-</span> epi_aggregate[,</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  epi_aggregate<span class="sc">$</span>new_annotation <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">'Tumor_PanIN/GLTumor'</span>, <span class="st">'PDTumor'</span>)</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>]</span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>ct_data <span class="ot">&lt;-</span> <span class="fu">GetAssayData</span>(tumor_epi_aggregate, <span class="at">assay =</span> <span class="st">'epiexp'</span>, <span class="at">layer =</span> <span class="st">'counts'</span>)</span>
@@ -905,18 +907,18 @@ div.csl-indent {
 <span id="cb11-53"><a href="#cb11-53" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="cn">NULL</span>,</span>
 <span id="cb11-54"><a href="#cb11-54" aria-hidden="true" tabindex="-1"></a>  <span class="at">border =</span> <span class="st">'full'</span>,</span>
 <span id="cb11-55"><a href="#cb11-55" aria-hidden="true" tabindex="-1"></a>  <span class="at">axisLabSize =</span> <span class="dv">10</span></span>
-<span id="cb11-56"><a href="#cb11-56" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb11-56"><a href="#cb11-56" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
 </section>
 <section id="gsea" class="level3">
 <h3 class="anchored" data-anchor-id="gsea">4.3 GSEA</h3>
-<p>We will use MSigDB Hallmark gene sets <span class="citation" data-cites="msigdb">(<a href="#ref-msigdb" role="doc-biblioref">Liberzon et al. 2011</a>)</span>downloaded using <code>msigdbr</code> R package <span class="citation" data-cites="msigdbr">(<a href="#ref-msigdbr" role="doc-biblioref">Dolgalev et al. 2022</a>)</span>. We will use <code>clusterProfiler</code> <span class="citation" data-cites="clusterprofiler">(<a href="#ref-clusterprofiler" role="doc-biblioref">Wu et al. 2021</a>)</span> that implements <code>fgsea</code> <span class="citation" data-cites="fgsea">(<a href="#ref-fgsea" role="doc-biblioref">Korotkevich et al. 2016</a>)</span> for calculation of enrichment scores.</p>
+<p>We will use MSigDB Hallmark gene sets <span class="citation" data-cites="msigdb">(<a href="#ref-msigdb" role="doc-biblioref">Liberzon et al. 2011</a>)</span>downloaded using <code>msigdbr</code> R package <span class="citation" data-cites="msigdbr">(<a href="#ref-msigdbr" role="doc-biblioref"><span class="nocase">Dolgalev et al.</span> 2022</a>)</span>. We will use <code>clusterProfiler</code> <span class="citation" data-cites="clusterprofiler">(<a href="#ref-clusterprofiler" role="doc-biblioref"><span class="nocase">Wu et al.</span> 2021</a>)</span> that implements <code>fgsea</code> <span class="citation" data-cites="fgsea">(<a href="#ref-fgsea" role="doc-biblioref">Korotkevich et al. 2016</a>)</span> for calculation of enrichment scores.</p>
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>hallmark_sets <span class="ot">&lt;-</span> <span class="fu">msigdbr</span>(<span class="at">species =</span> <span class="st">'Homo sapiens'</span>, <span class="at">category =</span> <span class="st">"H"</span>) <span class="sc">%&gt;%</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>hallmark_sets <span class="ot">&lt;-</span> <span class="fu">msigdbr</span>(<span class="at">species =</span> <span class="st">'Homo sapiens'</span>, <span class="at">category =</span> <span class="st">"H"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(gs_name, gene_symbol) <span class="sc">%&gt;%</span></span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">gs_name =</span> <span class="fu">gsub</span>(<span class="st">"^HALLMARK_"</span>, <span class="st">""</span>, gs_name))</span>
 <span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
@@ -952,7 +954,7 @@ div.csl-indent {
 <span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a><span class="fu">qsave</span>(</span>
 <span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a>  PDTumor_vs_TumorPanIN_gsea,</span>
 <span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a>  <span class="st">"outputs/Epithelial_Analysis/PDTumor_v_TumorPanIN_GSEA.qs"</span></span>
-<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -962,31 +964,31 @@ div.csl-indent {
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>R version 4.4.0 (2024-04-24)
+<pre><code>R version 4.5.2 (2025-10-31)
 Platform: aarch64-apple-darwin20
-Running under: macOS 26.0
+Running under: macOS Tahoe 26.5
 
 Matrix products: default
-BLAS:   /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRblas.0.dylib 
-LAPACK: /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.0
+BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 
 locale:
 [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 
-time zone: America/Detroit
+time zone: America/New_York
 tzcode source: internal
 
 attached base packages:
 [1] stats     graphics  grDevices utils     datasets  methods   base     
 
 loaded via a namespace (and not attached):
- [1] htmlwidgets_1.6.4 compiler_4.4.0    fastmap_1.2.0     cli_3.6.2        
- [5] tools_4.4.0       htmltools_0.5.8.1 yaml_2.3.8        rmarkdown_2.27   
- [9] knitr_1.47        jsonlite_1.8.8    xfun_0.52         digest_0.6.35    
-[13] rlang_1.1.3       evaluate_0.23    </code></pre>
+ [1] htmlwidgets_1.6.4 compiler_4.5.2    fastmap_1.2.0     cli_3.6.5        
+ [5] tools_4.5.2       htmltools_0.5.9   otel_0.2.0        yaml_2.3.12      
+ [9] rmarkdown_2.30    knitr_1.51        jsonlite_2.0.0    xfun_0.56        
+[13] digest_0.6.39     rlang_1.1.7       evaluate_1.0.5   </code></pre>
 </div>
 </div>
 
@@ -994,15 +996,15 @@ loaded via a namespace (and not attached):
 
 </section>
 
-<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" role="list">
 <div id="ref-monocle3" class="csl-entry" role="listitem">
-Cao, Junyue, Malte Spielmann, Xiaojie Qiu, Xingfan Huang, Daniel M Ibrahim, Andrew J Hill, Fan Zhang, et al. 2019. <span>“The Single-Cell Transcriptional Landscape of Mammalian Organogenesis.”</span> <em>Nature</em> 566 (7745): 496–502.
+<span class="nocase">Cao, Junyue, Malte Spielmann, Xiaojie Qiu, et al.</span> 2019. <span>“The Single-Cell Transcriptional Landscape of Mammalian Organogenesis.”</span> <em>Nature</em> 566 (7745): 496–502.
 </div>
 <div id="ref-bayesprism" class="csl-entry" role="listitem">
 Chu, Tinyi, Zhong Wang, Dana Pe’er, and Charles G Danko. 2022. <span>“Cell Type and Gene Expression Deconvolution with BayesPrism Enables Bayesian Integrative Analysis Across Bulk and Single-Cell RNA Sequencing in Oncology.”</span> <em>Nature Cancer</em> 3 (4): 505–17.
 </div>
 <div id="ref-msigdbr" class="csl-entry" role="listitem">
-Dolgalev, Igor et al. 2022. <span>“Msigdbr: MSigDB Gene Sets for Multiple Organisms in a Tidy Data Format.”</span> <em>R Package Version</em> 7 (1).
+<span class="nocase">Dolgalev, Igor et al.</span> 2022. <span>“Msigdbr: MSigDB Gene Sets for Multiple Organisms in a Tidy Data Format.”</span> <em>R Package Version</em> 7 (1).
 </div>
 <div id="ref-fgsea" class="csl-entry" role="listitem">
 Korotkevich, Gennady, Vladimir Sukhov, Nikolay Budin, Boris Shpak, Maxim N Artyomov, and Alexey Sergushichev. 2016. <span>“Fast Gene Set Enrichment Analysis.”</span> <em>Biorxiv</em>, 060012.
@@ -1017,7 +1019,7 @@ Love, Michael I, Wolfgang Huber, and Simon Anders. 2014. <span>“Moderated Esti
 Setty, Manu, Vaidotas Kiseliovas, Jacob Levine, Adam Gayoso, Linas Mazutis, and Dana Pe’Er. 2019. <span>“Characterization of Cell Fate Probabilities in Single-Cell Data with Palantir.”</span> <em>Nature Biotechnology</em> 37 (4): 451–60.
 </div>
 <div id="ref-clusterprofiler" class="csl-entry" role="listitem">
-Wu, Tianzhi, Erqiang Hu, Shuangbin Xu, Meijun Chen, Pingfan Guo, Zehan Dai, Tingze Feng, et al. 2021. <span>“clusterProfiler 4.0: A Universal Enrichment Tool for Interpreting Omics Data.”</span> <em>The Innovation</em> 2 (3).
+<span class="nocase">Wu, Tianzhi, Erqiang Hu, Shuangbin Xu, et al.</span> 2021. <span>“clusterProfiler 4.0: A Universal Enrichment Tool for Interpreting Omics Data.”</span> <em>The Innovation</em> 2 (3).
 </div>
 </div></section></div></main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
@@ -1071,13 +1073,14 @@ Wu, Tianzhi, Erqiang Hu, Shuangbin Xu, Meijun Chen, Pingfan Guo, Zehan Dai, Ting
       e.clearSelection();
     }
     const getTextToCopy = function(trigger) {
-        const codeEl = trigger.previousElementSibling.cloneNode(true);
-        for (const childEl of codeEl.children) {
-          if (isCodeAnnotation(childEl)) {
-            childEl.remove();
-          }
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
         }
-        return codeEl.innerText;
+      }
+      return codeEl.innerText;
     }
     const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
       text: getTextToCopy
