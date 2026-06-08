@@ -1,5 +1,5 @@
 ---
-title: "PanIN & PDAC Spatial Transcriptomics Paper Code"
+title: "(Elhossiny et al, 2026, Cancer Discovery) Paper Code"
 author: 
     name: "Ahmed M. Elhossiny"
     email: "hossiny@umich.edu"
@@ -14,21 +14,26 @@ execute:
 ---
 
 ## Introduction
-This is documentation for the code used for analysis in [Preprint Link](). Here, we leverage single-cell RNAseq and spatial transcriptomics data to investigate the epithelial and stromal co-evolution in pancreatic cancer.
+This is documentation for the code used for analysis in [@elhossiny2026asynchronous]. Here, we leverage single-cell RNAseq and spatial transcriptomics data to investigate the epithelial and stromal co-evolution in pancreatic cancer.
 
 ## Data
-We used a cohort of scRNAseq samples composed of healthy (n = 24), Adjacent normal to tumor (n = 3) and PDAC (n = 18) samples and 10x Visium samples composed of healthy (n = 5), Adjacent normal to tumor (n = 2) and PDAC (n = 7). The samples are integrated from [@steele2020multimodal], [@carpenter2023analysis], [@carpenter2024krt17high] and [**Preprint Link**]() studies. 
+We used a cohort of scRNAseq samples composed of healthy (n = 24), Adjacent normal to tumor (n = 3) and PDAC (n = 18) samples and 10x Visium samples composed of healthy (n = 11), Adjacent normal to tumor (n = 2) and PDAC (n = 7). The samples are integrated from [@elhossiny2026asynchronous], [@carpenter2024krt17high], [@carpenter2023analysis], [@steele2020multimodal] studies. 
 
 ## Downloading raw and processed data
-* Raw fastq data can be find in these dbGAP repositories:
-* Raw count matrices can be found in these GEO repositories:
-* Processed data objects and full resolution H&E are available on Zenodo:
+<!-- * Raw fastq data can be find in these dbGAP repositories: -->
+* Raw data for spatial samples and full resolution H&E are available[here](https://zenodo.org/records/19304282)  
+* Raw data for the new scRNAseq samples can be found [here](https://zenodo.org/records/17538974)
+* Raw data for the previous studies can be found in these GEO repositories: [GSE229413](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE229413), [GSE155698](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE155698), [phs003436.v1.p1](https://dbgap.ncbi.nlm.nih.gov/beta/study/phs003436.v1.p1)
+* Raw data for organoids samples can be found [here](https://zenodo.org/records/19305784)
+* Processed data objects [here](https://zenodo.org/records/19305449) 
 
-Data acquisition can also be done as described in [scRNAseq Acquisition](scRNAseq_data_acquisiton.qmd) and [Spatial Transcriptomics Acquisition](st_data_acquisition.qmd)
+<!-- Data acquisition can also be done as described in [scRNAseq Acquisition](scRNAseq_data_acquisiton.qmd) and [Spatial Transcriptomics Acquisition](st_data_acquisition.qmd) -->
 
 ## Analysis
-The analysis workflow and findings are explained in detail in [Preprint Link]()
-<!-- ![](images/Fig1.Overview.jpg) -->
+The analysis workflow and findings are explained in detail in [@elhossiny2026asynchronous].
+
+
+![](images/Fig1.Overview.jpg)
 
 ### scRNAseq Analysis
 
@@ -59,6 +64,10 @@ The analysis workflow and findings are explained in detail in [Preprint Link]()
 * Data processing and integration is described here [Xenium Data Analysis](st_xenium_processing.qmd)
 * Spatial regression was done using semla [@semla] is described here [Xenium Spatial Regression](st_xenium_regression.qmd)
 * Visualization of data is done as described here [Xenium Polygons Visualization](st_xenium_viz.qmd)
+
+#### CosMx
+
+* Projection of Fibroblasts signature on external CosMx dataset is described here [CosMx Data Analysis](st_cosmx_processing.qmd)
 
 ## Interactive Visualization
 You can explore the data interactively on [https://pascadimagliano-lab.github.io/PancAtlas/](https://pascadimagliano-lab.github.io/PancAtlas/)
